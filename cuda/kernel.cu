@@ -7,9 +7,11 @@ using namespace torch::indexing;
 #define CHECK_CONTIGUOUS(x) TORCH_CHECK(x.is_contiguous(), #x " must be contiguous")
 #define CHECK_INPUT(x) CHECK_CUDA(x); CHECK_CONTIGUOUS(x)
 
+#define NUM_THREADS 256
+
 inline unsigned int cdiv(unsigned int a, unsigned int b) { return (a + b - 1) / b;}
 
-__global__ void conv_kernel(const c10::complex<double>* fdl, const c10::complex<double>* filters_fd, int fdl_cursor, c10::complex<double>* output_fd, int K, int B, int C) {
+__global__ void conv_kernel(const c10::complex<double>* fdl, const c10::complex<double>* filters_fd, const int fdl_cursor, c10::complex<double>* output_fd, const int K, const int B, const int C) {
     
     const int thread_id = blockIdx.x * blockDim.x + threadIdx.x;
     
@@ -31,20 +33,19 @@ __global__ void conv_kernel(const c10::complex<double>* fdl, const c10::complex<
     output_fd[output_offset] = out;
 }
 
-torch::Tensor part_conv_gpu(torch::Tensor input_fd, torch::Tensor fdl, torch::Tensor filters_fd, int fdl_cursor, int K, int B, int C) {
+torch::Tensor part_conv_gpu(torch::Tensor input_fd, torch::Tensor fdl, torch::Tensor filters_fd, const int fdl_cursor, const int K, const int B, const int C) {
     CHECK_INPUT(input_fd);
     CHECK_INPUT(fdl);
     CHECK_INPUT(filters_fd);
 
     auto output_fd = torch::empty({C, B+1}, input_fd.options());
 
-    int threads = 256;
-    int blocks = cdiv(C * (B + 1), threads);
+    const int blocks = cdiv(C * (B + 1), NUM_THREADS);
 
     // Store the fd signal in a frequency-domain delay line
     fdl.index_put_({Slice(0, B+1), fdl_cursor}, input_fd);
 
-    conv_kernel<<<blocks, threads>>>(fdl.data_ptr<c10::complex<double>>(), filters_fd.data_ptr<c10::complex<double>>(), fdl_cursor, output_fd.data_ptr<c10::complex<double>>(), K, B, C);
+    conv_kernel<<<blocks, NUM_THREADS>>>(fdl.data_ptr<c10::complex<double>>(), filters_fd.data_ptr<c10::complex<double>>(), fdl_cursor, output_fd.data_ptr<c10::complex<double>>(), K, B, C);
     
     C10_CUDA_KERNEL_LAUNCH_CHECK();
     return output_fd;

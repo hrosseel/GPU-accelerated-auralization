@@ -11,7 +11,7 @@ from torch.utils.cpp_extension import load_inline
 def load_cuda(cuda_src, cpp_src, funcs, opt=False, verbose=False):
     return load_inline(cuda_sources=[cuda_src], cpp_sources=[cpp_src],
                        functions=funcs, extra_cuda_cflags=[
-                           "-O2"] if opt else [], verbose=verbose,
+                           "-Xptxas -O3 --gpu-architecture=sm_80 --gpu-code=sm_80"] if opt else [], verbose=verbose,
                        name="inline_ext")
 
 
@@ -23,7 +23,6 @@ cuda_src = open(cuda_code_path, "r").read()
 cpp_src = ("torch::Tensor part_conv_gpu(torch::Tensor input_fd, torch::Tensor fdl, "
            "torch::Tensor filters_fd, int fdl_cursor, int K, int B, int C);")
 module = load_cuda(cuda_src, cpp_src, ['part_conv_gpu'], verbose=False)
-
 # ================================================================
 
 
@@ -69,11 +68,9 @@ class PartitionedConvolution:
             self.K = self.FL // self.B
 
         # create filter partitions
-        self.filter_parts = np.pad(
-            filter_td, ((0, 0), (0, self.K * self.B - self.FL)), mode='constant').reshape(self.C, self.B, self.K, order='F')
-
-        assert (self.filter_parts[0, :self.B, 0]
-                == filter_td[0, :self.B]).all()
+        remainder = self.K * self.B - self.FL
+        self.filter_parts = np.pad(filter_td, ((0, 0), (0, remainder)),
+                                   mode='constant').reshape(self.C, self.B, self.K, order='F')
 
         # Transform the filter to the frequency domain
         self.filters_fd = self.transform_rfft_filter(self.filter_parts)

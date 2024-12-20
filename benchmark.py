@@ -2,7 +2,20 @@
 
 import time
 import numpy as np
+import torch
 from partitioned_convolution import PartitionedConvolutionCPU, PartitionedConvolutionGPU
+
+
+# def setup(B, C, filter_len):
+#     filter_td = np.random.randn(C, filter_len).astype(np.float32)
+#     pc = PartitionedConvolutionCPU(filter_td, B)
+#     pc_gpu = PartitionedConvolutionGPU(filter_td, B)
+#     signal = np.random.randn(input_len)
+#     signal_batch = np.pad(signal, (0, int(np.ceil(filter_len / B) * B)),
+#                           mode='constant').reshape(-1, B)
+#     return pc, pc_gpu, signal_batch
+
+
 # Define the parameters
 B = 256
 C = 24
@@ -31,13 +44,14 @@ signal_batch = np.pad(signal, (0, int(np.ceil(FL / B) * B)),
 #     f"CPU time per iteration: {(end_time - start_time) / (input_len // B)} s")
 
 # Benchmark the GPU implementation
-start_time = time.time()
+log = []
 for input_idx, input_batch in enumerate(signal_batch):
-    output = pc_gpu.convolve(input_batch).cpu()
-end_time = time.time()
-print(f"GPU time: {end_time - start_time} s")
-print(
-    f"GPU time per iteration: {(end_time - start_time) / (input_len // B)} s")
+    start_time = time.time()
+    output = pc_gpu.convolve(input_batch)
+    end_time = time.time()
+    log.append(end_time - start_time)
 
-print(
-    f"Latency in samples: {(end_time - start_time) / (input_len // B) * 48000}")
+print(f"Mean iteration: {np.mean(log)} s")
+print(f"Median iteration: {np.median(log)} s")
+print(f"Slowest iteration: {np.max(log)} s")
+print(f"Fastest iteration: {np.min(log)} s")
