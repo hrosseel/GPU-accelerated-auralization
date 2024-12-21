@@ -3,6 +3,8 @@ import numpy as np
 import torch
 import os
 
+# Set the TORCH_CUDA_ARCH_LIST environment variable
+os.environ['TORCH_CUDA_ARCH_LIST'] = '8.6'
 from torch.utils.cpp_extension import load_inline
 
 
@@ -10,9 +12,8 @@ from torch.utils.cpp_extension import load_inline
 # ================================================================
 def load_cuda(cuda_src, cpp_src, funcs, opt=False, verbose=False):
     return load_inline(cuda_sources=[cuda_src], cpp_sources=[cpp_src],
-                       functions=funcs, extra_cuda_cflags=[
-                           "-Xptxas -O3 --gpu-architecture=sm_80 --gpu-code=sm_80"] if opt else [], verbose=verbose,
-                       name="inline_ext")
+                       functions=funcs, extra_cuda_cflags=["-Xptxas -O3"]
+                       if opt else [], verbose=verbose, name="inline_ext")
 
 
 # Load CUDA code from file "cuda/kernel.cu"
