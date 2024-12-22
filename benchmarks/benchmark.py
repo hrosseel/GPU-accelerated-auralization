@@ -3,16 +3,24 @@ import time
 import numpy as np
 import torch
 
+import matplotlib.pyplot as plt
+
 import partitioned_convolution as fpc
 
-# Define the parameters
-B = 128
-C = 2
-FL = 500_000
-input_len = B * 800
 
-# Create the filterß
-filter_td = np.random.randn(C, FL).astype(np.float32)
+# parameters
+warmup_it = 10
+
+
+# Define the parameters
+B = 512
+C = 24
+FL = 300_000
+input_len = B * 10
+
+# Create the filter
+filter_td = np.random.randn(C * FL).astype(np.float32)
+filter_td = filter_td.reshape(C, FL, order='C')
 
 # Create the partitioned convolution object
 pc = fpc.PartitionedConvolutionCPU(filter_td, B)
@@ -24,29 +32,50 @@ signal_batch = np.pad(signal, (0, int(np.ceil(FL / B) * B)),
                       mode='constant').reshape(-1, B)
 
 # Benchmark the CPU implementation
-# log = []
-# for input_idx, input_batch in enumerate(signal_batch):
-#     start_time = time.time()
-#     output = pc.convolve(input_batch)
-#     end_time = time.time()
-#     log.append(end_time - start_time)
 
-# print(f"CPU time: {end_time - start_time} s")
-# print(f"  Mean iteration: {np.mean(log)} s")
-# print(f"  Median iteration: {np.median(log)} s")
-# print(f"  Slowest iteration: {np.max(log)} s")
-# print(f"  Fastest iteration: {np.min(log)} s")
+# Warm-up
+for _ in range(warmup_it):
+    pc.convolve(np.zeros(B))
+
+log_cpu = []
+for input_idx, input_batch in enumerate(signal_batch):
+    start_time = time.perf_counter()
+    output = pc.convolve(input_batch)
+    end_time = time.perf_counter()
+    log_cpu.append(end_time - start_time)
+
+print(f"CPU time: {end_time - start_time} s")
+print(f"  Mean iteration: {np.mean(log_cpu)} s")
+print(f"  Median iteration: {np.median(log_cpu)} s")
+print(f"  Fastest iteration: {np.min(log_cpu)} s")
+print(f"  Slowest iteration: {np.max(log_cpu)} s")
 
 # Benchmark the GPU implementation
-log = []
+
+# Warm-up
+for _ in range(warmup_it):
+    pc_gpu.convolve(np.zeros(B))
+
+log_gpu = []
 for input_idx, input_batch in enumerate(signal_batch):
-    start_time = time.time()
+    start_time = time.perf_counter()
     output = pc_gpu.convolve(input_batch)
-    end_time = time.time()
-    log.append(end_time - start_time)
+    end_time = time.perf_counter()
+    log_gpu.append(end_time - start_time)
 
 print(f"GPU time: {end_time - start_time} s")
-print(f"  Mean iteration: {np.mean(log)} s")
-print(f"  Median iteration: {np.median(log)} s")
-print(f"  Slowest iteration: {np.max(log)} s")
-print(f"  Fastest iteration: {np.min(log)} s")
+print(f"  Mean iteration: {np.mean(log_gpu)} s")
+print(f"  Median iteration: {np.median(log_gpu)} s")
+print(f"  Fastest iteration: {np.min(log_gpu)} s")
+print(f"  Slowest iteration: {np.max(log_gpu)} s")
+
+
+# Plot the results
+plt.figure()
+plt.plot(log_cpu, label='CPU')
+plt.plot(log_gpu, label='GPU')
+plt.legend()
+plt.xlabel('Iteration')
+plt.ylabel('Time (s)')
+plt.title('Partitioned convolution benchmark')
+plt.show()

@@ -1,3 +1,4 @@
+from numba import njit, prange, complex64, int64
 import numpy as np
 import torch
 import os
@@ -5,7 +6,6 @@ import os
 # Set the TORCH_CUDA_ARCH_LIST environment variable
 os.environ['TORCH_CUDA_ARCH_LIST'] = '8.6'
 from torch.utils.cpp_extension import load_inline
-
 
 # Load the CUDA code
 # ================================================================
@@ -25,6 +25,17 @@ cpp_src = ("torch::Tensor part_conv_gpu(torch::Tensor input_fd, torch::Tensor fd
 module = load_cuda(cuda_src, cpp_src, ['part_conv_gpu'], verbose=False)
 # ================================================================
 
+# Multi-threaded CPU implementation of the complex multiplication
+# ================================================================
+@njit(complex64[:, ::1](complex64[:, :, :], complex64[:, ::1], int64, int64, complex64[:, :, ::1]), parallel=True)
+def cpu_multiply(filters_fd: np.ndarray, fdl: np.ndarray, fdl_cursor: int,
+                 K: int, temp_buffer: np.ndarray) -> np.ndarray:
+    for k in prange(K):
+        cursor = (fdl_cursor - k) % K
+        for c_idx, filter_fd in enumerate(filters_fd):
+            temp_buffer[k, c_idx] = filter_fd[:, k] * fdl[:, cursor]
+    return temp_buffer.sum(axis=0)
+# ================================================================
 
 # Main class
 class PartitionedConvolution:
@@ -67,14 +78,9 @@ class PartitionedConvolution:
         else:
             self.K = self.FL // self.B
 
-        # create filter partitions
-        remainder = self.K * self.B - self.FL
-        self.filter_parts = np.pad(filter_td, ((0, 0), (0, remainder)),
-                                   mode='constant').reshape(self.C, self.B, self.K, order='F')
-
-        # Transform the filter to the frequency domain
-        self.filters_fd = self.transform_rfft_filter(self.filter_parts)
-
+        # Create the filter blocks
+        self.filters_fd = self.create_filter_blocks(filter_td)
+    
         # Initialize the frequency-domain delay line (FDL)
         self.fdl = torch.zeros(
             (self.B + 1, self.K), dtype=torch.complex64)
@@ -112,14 +118,20 @@ class PartitionedConvolution:
         # Only return the valid samples
         return output_td[:, self.B:].T
 
-    def transform_rfft_filter(self, filters_td: np.ndarray) -> torch.Tensor:
+    def create_filter_blocks(self, filter_td: np.ndarray) -> torch.Tensor:
+        # create filter partitions
+        remainder = self.K * self.B - self.FL
+        filter_parts = np.pad(filter_td, ((0, 0), (0, remainder)),
+                              mode='constant').reshape(self.C, self.B, self.K, order='F')
+
         # Partition the filter into blocks of length B, and zero-pad another B samples
         filters_padded = np.pad(
-            np.array(filters_td), ((0, 0), (0, self.B), (0, 0)), mode='constant')  # shape: (C, 2 * B, K)
+            np.array(filter_parts), ((0, 0), (0, self.B), (0, 0)), mode='constant')  # shape: (C, 2 * B, K)
 
-        filters_padded = torch.tensor(filters_padded)
         # Compute the RFFT of the filters (real-to-complex FFT)
-        return torch.fft.rfft(filters_padded, axis=1)  # shape: (K, B + 1, C)
+        # Note: torch.fft.rfft messes up the ordering (F-contiguous) of the array
+        return torch.from_numpy(np.fft.rfft(filters_padded, axis=1))  # shape: (K, B + 1, C)
+        
 
     def perform_convolution(self, input_fd: torch.Tensor | np.ndarray) -> torch.Tensor:
         raise NotImplementedError(
@@ -138,6 +150,9 @@ class PartitionedConvolutionCPU(PartitionedConvolution):
         """
         PartitionedConvolution.__init__(
             self, filter_td, block_length_samples, dtype)
+        
+        self.temp_buffer = np.empty((self.K, self.filters_fd.shape[0], self.filters_fd.shape[1]), dtype=np.complex64)
+
 
     def perform_convolution(self, input_fd: torch.Tensor | np.ndarray) -> torch.Tensor:
 
@@ -147,12 +162,13 @@ class PartitionedConvolutionCPU(PartitionedConvolution):
         # Store the fd signal in a frequency-domain delay line
         self.fdl[:, self.fdl_cursor] = input_fd
 
+        # Convert to numpy array
+        fdl = self.fdl.numpy()
+        filters_fd = self.filters_fd.numpy()
+        
         # Perform the complex multiplication between the fdl and the filter partitions
-        output_fd = torch.zeros((self.C, self.B + 1), dtype=torch.complex64)
-        for k in range(self.K):
-            cursor = (self.fdl_cursor - k) % self.K
-            output_fd += self.filters_fd[:, :, k] * self.fdl[:, cursor]
-        return output_fd
+        output_fd = cpu_multiply(filters_fd, fdl, self.fdl_cursor, self.K, self.temp_buffer)
+        return torch.from_numpy(output_fd)
 
 
 # GPU implementation
