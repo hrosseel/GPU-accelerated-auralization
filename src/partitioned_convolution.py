@@ -1,5 +1,4 @@
 import numpy as np
-
 import torch
 import os
 
@@ -17,7 +16,7 @@ def load_cuda(cuda_src, cpp_src, funcs, opt=False, verbose=False):
 
 
 # Load CUDA code from file "cuda/kernel.cu"
-cuda_code_path = os.path.join(os.path.dirname(__file__), "cuda/kernel.cu")
+cuda_code_path = os.path.join(os.path.dirname(__file__), "kernel.cu")
 cuda_src = open(cuda_code_path, "r").read()
 
 # Load CUDA code and function signature
@@ -78,7 +77,7 @@ class PartitionedConvolution:
 
         # Initialize the frequency-domain delay line (FDL)
         self.fdl = torch.zeros(
-            (self.B + 1, self.K), dtype=torch.complex128)
+            (self.B + 1, self.K), dtype=torch.complex64)
         self.fdl_cursor = 0
 
         # Initialize the input buffer
@@ -149,11 +148,10 @@ class PartitionedConvolutionCPU(PartitionedConvolution):
         self.fdl[:, self.fdl_cursor] = input_fd
 
         # Perform the complex multiplication between the fdl and the filter partitions
-        output_fd = torch.zeros((self.C, self.B + 1), dtype=torch.complex128)
+        output_fd = torch.zeros((self.C, self.B + 1), dtype=torch.complex64)
         for k in range(self.K):
             cursor = (self.fdl_cursor - k) % self.K
-            output_fd += torch.mul(self.fdl[:, cursor],
-                                   self.filters_fd[:, :, k])
+            output_fd += self.filters_fd[:, :, k] * self.fdl[:, cursor]
         return output_fd
 
 
@@ -172,13 +170,13 @@ class PartitionedConvolutionGPU(PartitionedConvolution):
 
         # Load the filters to the GPU
         self.filters_fd_gpu = self.filters_fd.to(
-            'cuda').type(torch.complex128).contiguous()
+            'cuda').type(torch.complex64).contiguous()
         # Load the FDL to the GPU
-        self.fdl_gpu = self.fdl.to('cuda').type(torch.complex128).contiguous()
+        self.fdl_gpu = self.fdl.to('cuda').type(torch.complex64).contiguous()
 
     def perform_convolution(self, input_fd: torch.Tensor) -> torch.Tensor:
         # Move the input spectrum to the GPU
-        input_fd_gpu = input_fd.to('cuda').type(torch.complex128).contiguous()
+        input_fd_gpu = input_fd.to('cuda').type(torch.complex64).contiguous()
         # Perform the convolution on the GPU
         output_fd = module.part_conv_gpu(
             input_fd_gpu, self.fdl_gpu, self.filters_fd_gpu, self.fdl_cursor, self.K, self.B, self.C)

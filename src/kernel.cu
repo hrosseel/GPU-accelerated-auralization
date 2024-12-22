@@ -11,7 +11,7 @@ using namespace torch::indexing;
 
 inline unsigned int cdiv(unsigned int a, unsigned int b) { return (a + b - 1) / b;}
 
-__global__ void conv_kernel(const c10::complex<double>* fdl, const c10::complex<double>* filters_fd, const int fdl_cursor, c10::complex<double>* output_fd, const int K, const int B, const int C) {
+__global__ void conv_kernel(const c10::complex<float>* fdl, const c10::complex<float>* filters_fd, const int fdl_cursor, c10::complex<float>* output_fd, const int K, const int B, const int C) {
     
     const int thread_id = blockIdx.x * blockDim.x + threadIdx.x;
     
@@ -25,7 +25,7 @@ __global__ void conv_kernel(const c10::complex<double>* fdl, const c10::complex<
     const int filter_offset = channel_id * ((B + 1) * K) + bin_id * K;
     const int output_offset = channel_id * (B + 1) + bin_id;
 
-    c10::complex<double> out = 0;
+    c10::complex<float> out = 0;
     for (int k = 0; k < K; ++k) {
         out += fdl[fdl_offset + cursor] * filters_fd[filter_offset + k];
         cursor = (cursor - 1 + K) % K;
@@ -45,7 +45,7 @@ torch::Tensor part_conv_gpu(torch::Tensor input_fd, torch::Tensor fdl, torch::Te
     // Store the fd signal in a frequency-domain delay line
     fdl.index_put_({Slice(0, B+1), fdl_cursor}, input_fd);
 
-    conv_kernel<<<blocks, NUM_THREADS>>>(fdl.data_ptr<c10::complex<double>>(), filters_fd.data_ptr<c10::complex<double>>(), fdl_cursor, output_fd.data_ptr<c10::complex<double>>(), K, B, C);
+    conv_kernel<<<blocks, NUM_THREADS>>>(fdl.data_ptr<c10::complex<float>>(), filters_fd.data_ptr<c10::complex<float>>(), fdl_cursor, output_fd.data_ptr<c10::complex<float>>(), K, B, C);
     
     C10_CUDA_KERNEL_LAUNCH_CHECK();
     return output_fd;

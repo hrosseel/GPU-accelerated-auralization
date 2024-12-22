@@ -1,0 +1,58 @@
+# Guide (user-friendly):
+# https://packaging.python.org/en/latest/guides/writing-pyproject-toml/
+
+# Specification (technical, formal):
+# https://packaging.python.org/en/latest/specifications/pyproject-toml/
+
+
+# Choosing a build backend:
+# https://packaging.python.org/en/latest/tutorials/packaging-projects/#choosing-a-build-backend
+[build-system]
+# A list of packages that are needed to build your package:
+requires = ["setuptools"] # REQUIRED if [build-system] table is used
+# The name of the Python object that frontends will use to perform the build:
+build-backend = "setuptools.build_meta" # If not defined, then legacy behavior can happen.
+
+[project]
+name = "fast_partitioned_convolution"
+
+# Versions should comply with PEP 440:
+# https://www.python.org/dev/peps/pep-0440/
+#
+# For a discussion on single-sourcing the version, see
+# https://packaging.python.org/guides/single-sourcing-package-version/
+version = "0.0.1" # REQUIRED, although can be dynamic
+
+# This is a one-line description or tagline of what your project does. This
+# corresponds to the "Summary" metadata field:
+# https://packaging.python.org/specifications/core-metadata/#summary
+description = "A Python implementation of the partitioned convolution algorithm, accelerated on the GPU."
+
+# This field corresponds to the "Description" metadata field:
+# https://packaging.python.org/specifications/core-metadata/#description-optional
+readme = "README.md"
+
+# Specify which Python versions you support. In contrast to the
+# 'Programming Language' classifiers in this file, 'pip install' will check this
+# and refuse to install the project if the version does not match. See
+# https://packaging.python.org/guides/distributing-packages-using-setuptools/#python-requires
+requires-python = ">=3.9"
+
+maintainers = [
+  { name = "Hannes Rosseel", email = "hannes.rosseel@esat.kuleuven.be" },
+]
+
+# Classifiers help users find your project by categorizing it.
+#
+# For a list of valid classifiers, see https://pypi.org/classifiers/
+classifiers = [
+  # How mature is this project? Common values are
+  #   3 - Alpha
+  #   4 - Beta
+  #   5 - Production/Stable
+  "Development Status :: 3 - Alpha",
+]
+
+# For an analysis of this field vs pip's requirements files see:
+# https://packaging.python.org/discussions/install-requires-vs-requirements/
+dependencies = ["numpy", "torch", "scipy"]
