@@ -36,13 +36,7 @@ def benchmark(pc: fpc.PartitionedConvolution, signal_batch: np.ndarray, warmup_i
         end_time = time.perf_counter()
         log.append(end_time - start_time)
 
-    std_dev = np.std(log)
-    mean = np.mean(log)
-    median = np.median(log)
-    min_time = np.min(log)
-    max_time = np.max(log)
-
-    return mean, median, std_dev, min_time, max_time
+    return log
 
 
 # Benchmark the GPU implementation

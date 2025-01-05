@@ -4,48 +4,38 @@ import csv
 import os
 
 workspace_dir = os.path.dirname(os.path.abspath(__file__))
-csv_filepath = os.path.join(workspace_dir, '../benchmark_results_1000runs.csv')
-# Read the results from the CSV file
-with open(csv_filepath, mode='r') as file:
-    reader = csv.reader(file)
-    header = next(reader)
-    data = np.array(list(reader))
+benchmark_filter_len_path = os.path.join(workspace_dir, '../benchmark_filter_len.npz')
 
-# Extract the data
-filter_lengths = np.unique(data[:, 0].astype(int))
-num_channels = np.unique(data[:, 1].astype(int))
-block_sizes = np.unique(data[:, 2].astype(int))
-cpu_mean = data[:, 3].astype(float)
-cpu_median = data[:, 4].astype(float)
-cpu_std_dev = data[:, 5].astype(float)
-cpu_min = data[:, 6].astype(float)
-cpu_max = data[:, 7].astype(float)
-gpu_mean = data[:, 8].astype(float)
-gpu_median = data[:, 9].astype(float)
-gpu_std_dev = data[:, 10].astype(float)
-gpu_min = data[:, 11].astype(float)
-gpu_max = data[:, 12].astype(float)
+# Default parameters
+fs = 48_000
+num_input_frames = 10_000
+default_num_channels = 32
+default_block_size = 128  # 2.6 ms latency budget
+default_filter_length = fs * 10  # 10 seconds
 
-# Default plot parameters
-filt_filter_len = 960000
-filt_num_ch = 32
-filt_block_size = 128
-filter_indices = np.where((data[:, 0].astype(int) == filt_filter_len) & (data[:, 2].astype(int) == filt_block_size))
+# Load the benchmark results
+benchmark_filter_len = np.load(benchmark_filter_len_path, allow_pickle=True)
 
-# Plot the results
-fig, axs = plt.subplots(1, 1)
-axs.set_title('Benchmark Results')
-axs.set_xlabel('Number of Channels')
-axs.set_ylabel('Time (s)')
+# Plot the benchmark results for different filter lengths (Box plot)
+# =================================================================
 
-# Plot the CPU results
-axs.plot(num_channels, cpu_median[filter_indices], label='CPU Median')
-low_bound, upper_bound = cpu_median[filter_indices] + (-cpu_std_dev[filter_indices], cpu_std_dev[filter_indices])
-axs.fill_between(num_channels, low_bound, upper_bound, alpha=0.1)
+# Extract the data -- filter lengths, CPU logs, and GPU logs
+filter_lengths = benchmark_filter_len['filter_lengths'] / fs
+cpu_logs = benchmark_filter_len['cpu_logs']
+gpu_logs = benchmark_filter_len['gpu_logs']
 
-axs.plot(num_channels, gpu_median[filter_indices], label='GPU Median')
-low_bound, upper_bound = gpu_median[filter_indices] + (-gpu_std_dev[filter_indices], gpu_std_dev[filter_indices])
-axs.fill_between(num_channels, low_bound, upper_bound, alpha=0.1)
+# Plot the results with uncertainty bounds  
+plt.figure()
+plt.plot(filter_lengths, np.median(cpu_logs, axis=1), label='CPU', color='blue')
+plt.fill_between(filter_lengths, cpu_logs.min(axis=1), cpu_logs.max(axis=1), color='blue', alpha=0.1)
+plt.plot(filter_lengths, np.median(gpu_logs, axis=1), label='GPU', color='red')
+plt.fill_between(filter_lengths, gpu_logs.min(axis=1), gpu_logs.max(axis=1), alpha=0.1, color='red')
 
-axs.hlines(filt_block_size / 48_000, num_channels[0], num_channels[-1], colors='r', linestyles='dashed', label='Latency budget')
-axs.legend()
+plt.hlines(default_block_size / fs, xmin=0, xmax=20, label="Latency Budget: $B = 256$", linestyles='dashed', color='black')
+
+# plot log-log scale
+plt.yscale('log')
+
+plt.legend()
+plt.ylabel('Time (seconds)')
+plt.grid()
