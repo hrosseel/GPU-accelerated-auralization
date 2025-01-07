@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from partitioned_convolution_multi import PartitionedConvolutionMultiCPU, PartitionedConvolutionMultiGPU
+from partitioned_convolution import PartitionedConvolutionCPU, PartitionedConvolutionGPU
 
 from scipy.signal import convolve
 
@@ -16,7 +16,7 @@ def test_single_channel_cpu():
     filters_td = filters_td.reshape(C, FL, order='C')
 
     # Load the partitioned convolution object
-    pc = PartitionedConvolutionMultiCPU(filters_td, B)
+    pc = PartitionedConvolutionCPU(filters_td, B)
 
     # Define the signal batch
     signal = np.random.randn(B * 10)
@@ -43,7 +43,7 @@ def test_single_channel_gpu():
     filters_td = filters_td.reshape(C, FL, order='C')
 
     # Load the partitioned convolution object
-    pc = PartitionedConvolutionMultiGPU(filters_td, B)
+    pc = PartitionedConvolutionGPU(filters_td, B)
 
     # Define the signal batch
     signal = np.random.randn(B * 10)
@@ -71,7 +71,7 @@ def test_dual_channels_cpu():
     filters_td = filters_td.reshape(C, FL, order='C')
 
     # Load the partitioned convolution object
-    pc = PartitionedConvolutionMultiCPU(filters_td, B)
+    pc = PartitionedConvolutionCPU(filters_td, B)
     
     # Define the signal batch
     signal = np.random.randn(B * 10)
@@ -104,7 +104,7 @@ def test_dual_channels_gpu():
     filters_td = filters_td.reshape(C, FL, order='C')
 
     # Load the partitioned convolution object
-    pc = PartitionedConvolutionMultiGPU(filters_td, B)
+    pc = PartitionedConvolutionGPU(filters_td, B)
 
     # Define the signal batch
     signal = np.random.randn(B * 10)
@@ -135,7 +135,7 @@ def test_multi_channels_cpu():
 
     filters_td = np.random.randn(C * FL).astype(np.float32)
     filters_td = filters_td.reshape(C, FL, order='C')
-    pc = PartitionedConvolutionMultiCPU(filters_td, B)
+    pc = PartitionedConvolutionCPU(filters_td, B)
 
     # Define the signal batch
     signal = np.random.randn(B * I)
@@ -156,35 +156,6 @@ def test_multi_channels_cpu():
             atol=5e-4, rtol=5e-4)
 
 
-def test_multi_channels_multi_input_cpu():
-    B = 256
-    C = 100
-    FL = B * 100
-    I = 10
-    K = np.ceil(FL / B).astype(int)
-
-    filters_td = np.random.randn(C * FL).astype(np.float32)
-    filters_td = filters_td.reshape(C, FL, order='C')
-    pc = PartitionedConvolutionMultiCPU(filters_td, B, num_input_channels=C)
-
-    # Define the signal batch
-    signal = np.random.randn(C, B * I)
-    signal_batch = signal.reshape(C, I, B).swapaxes(0, 1)
-
-    output_len = signal.shape[1] + FL - 1
-
-    true_output = np.zeros((output_len + B, C))
-    for c in range(C):
-        true_output[:output_len, c] = convolve(
-            signal[c, :], filters_td[c, :], mode='full')
-
-    for input_idx, input_batch in enumerate(signal_batch):
-        output = pc.convolve(input_batch)
-        np.testing.assert_allclose(
-            output, true_output[input_idx * B:(input_idx + 1) * B, :],
-            atol=5e-4, rtol=5e-4)
-
-
 # Test case 3: Multiple channels test GPU
 def test_multi_channels_gpu():
     B = 256
@@ -198,7 +169,7 @@ def test_multi_channels_gpu():
     filters_td = filters_td.reshape(C, FL, order='C')
 
     # Load the partitioned convolution object
-    pc = PartitionedConvolutionMultiGPU(filters_td, B)
+    pc = PartitionedConvolutionGPU(filters_td, B)
 
     # Define the signal batch
     signal = np.random.randn(B * I)
@@ -222,3 +193,62 @@ def test_multi_channels_gpu():
 if __name__ == "__main__":
 #    pytest.main()
     test_dual_channels_gpu()
+
+
+def test_multi_channels_multi_input_cpu():
+    B = 256
+    C = 100
+    FL = B * 100
+    I = 10
+    K = np.ceil(FL / B).astype(int)
+
+    filters_td = np.random.randn(C * FL).astype(np.float32)
+    filters_td = filters_td.reshape(C, FL, order='C')
+    pc = PartitionedConvolutionCPU(filters_td, B, num_input_channels=C)
+
+    # Define the signal batch
+    signal = np.random.randn(C, B * I)
+    signal_batch = signal.reshape(C, I, B).swapaxes(0, 1)
+
+    output_len = signal.shape[1] + FL - 1
+
+    true_output = np.zeros((output_len + B, C))
+    for c in range(C):
+        true_output[:output_len, c] = convolve(
+            signal[c, :], filters_td[c, :], mode='full')
+
+    for input_idx, input_batch in enumerate(signal_batch):
+        output = pc.convolve(input_batch)
+        np.testing.assert_allclose(
+            output, true_output[input_idx * B:(input_idx + 1) * B, :],
+            atol=5e-4, rtol=5e-4)
+
+
+def test_multi_channels_multi_input_gpu():
+    B = 256
+    C = 100
+    FL = B * 100
+    I = 10
+    K = np.ceil(FL / B).astype(int)
+
+    filters_td = np.random.randn(C * FL).astype(np.float32)
+    filters_td = filters_td.reshape(C, FL, order='C')
+    pc = PartitionedConvolutionGPU(filters_td, B, num_input_channels=C)
+
+    # Define the signal batch
+    signal = np.random.randn(C, B * I)
+    signal_batch = signal.reshape(C, I, B).swapaxes(0, 1)
+
+    output_len = signal.shape[1] + FL - 1
+
+    true_output = np.zeros((output_len + B, C))
+    for c in range(C):
+        true_output[:output_len, c] = convolve(
+            signal[c, :], filters_td[c, :], mode='full')
+
+    for input_idx, input_batch in enumerate(signal_batch):
+        output = pc.convolve(input_batch)
+        np.testing.assert_allclose(
+            output, true_output[input_idx * B:(input_idx + 1) * B, :],
+            atol=5e-4, rtol=5e-4)
+
