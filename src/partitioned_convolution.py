@@ -5,24 +5,27 @@ import os
 
 # Set the TORCH_CUDA_ARCH_LIST environment variable
 os.environ['TORCH_CUDA_ARCH_LIST'] = '8.6'
+os.environ['CUDA_LAUNCH_BLOCKING']='1'
+
 from torch.utils.cpp_extension import load_inline
+
 
 # Load the CUDA code
 # ================================================================
-def load_cuda(cuda_src, cpp_src, funcs, opt=False, verbose=False):
-    return load_inline(cuda_sources=[cuda_src], cpp_sources=[cpp_src],
-                       functions=funcs, extra_cuda_cflags=["-Xptxas -O3"]
-                       if opt else [], verbose=verbose, name="inline_ext")
-
+def load_cuda(cuda_src, cpp_src, funcs, K, B, C, verbose=False):
+    return load_inline(
+        cuda_sources=[cuda_src],
+        cpp_sources=[cpp_src],
+        functions=funcs,
+        extra_cuda_cflags=["-O2", f"-DNUM_CHANNELS={C}", f"-DBLOCK_SIZE={B}", f"-DNUM_PARTS={K}"],
+        verbose=verbose,
+        name="inline_ext"
+    )
 
 # Load CUDA code from file "cuda/kernel.cu"
 cuda_code_path = os.path.join(os.path.dirname(__file__), "kernel.cu")
 cuda_src = open(cuda_code_path, "r").read()
-
-# Load CUDA code and function signature
-cpp_src = ("torch::Tensor part_conv_gpu(torch::Tensor input_fd, torch::Tensor fdl, "
-           "torch::Tensor filters_fd, int fdl_cursor, int K, int B, int C);")
-module = load_cuda(cuda_src, cpp_src, ['part_conv_gpu'], verbose=False)
+cpp_src = "torch::Tensor part_conv_gpu(torch::Tensor input_fd, torch::Tensor fdl, torch::Tensor filters_fd, int fdl_cursor);"
 # ================================================================
 
 # Multi-threaded CPU implementation of the complex multiplication
@@ -52,6 +55,7 @@ class PartitionedConvolution:
 
         self.C, self.FL = filter_td.shape
         self.B = block_length_samples
+        self.K = np.ceil(self.FL / self.B).astype(int)
         self.dtype = dtype
 
         # Validate if FL > B
@@ -71,18 +75,11 @@ class PartitionedConvolution:
         if self.C < 1:
             raise ValueError("The number of channels must be greater than 1.")
 
-        # Calculate the number of partitions
-        if self.FL % self.B != 0:
-            self.K = self.FL // self.B + 1
-        else:
-            self.K = self.FL // self.B
-
         # Create the filter blocks
         self.filters_fd = self.__create_filter_blocks__(filter_td)
     
         # Initialize the frequency-domain delay line (FDL)
-        self.fdl = torch.zeros(
-            (self.B + 1, self.K), dtype=torch.complex64)
+        self.fdl = torch.zeros((self.B + 1, self.K), dtype=torch.complex64)
         self.fdl_cursor = 0
 
         # Initialize the input buffer
@@ -177,12 +174,13 @@ class PartitionedConvolutionGPU(PartitionedConvolution):
         :param block_length_samples: The block length B
         :param dtype: The data type
         """
-        PartitionedConvolution.__init__(
-            self, filter_td, block_length_samples, dtype)
+        PartitionedConvolution.__init__(self, filter_td, block_length_samples, dtype)
+
+        # Load CUDA module
+        self.module = load_cuda(cuda_src, cpp_src, ['part_conv_gpu'], self.K, self.B, self.C, verbose=True)
 
         # Load the filters to the GPU
-        self.filters_fd_gpu = self.filters_fd.to(
-            'cuda').type(torch.complex64).contiguous()
+        self.filters_fd_gpu = self.filters_fd.to('cuda').type(torch.complex64).contiguous()
         # Load the FDL to the GPU
         self.fdl_gpu = self.fdl.to('cuda').type(torch.complex64).contiguous()
 
@@ -190,7 +188,5 @@ class PartitionedConvolutionGPU(PartitionedConvolution):
         # Move the input spectrum to the GPU
         input_fd_gpu = input_fd.to('cuda').type(torch.complex64).contiguous()
         # Perform the convolution on the GPU
-        output_fd = module.part_conv_gpu(
-            input_fd_gpu, self.fdl_gpu, self.filters_fd_gpu, self.fdl_cursor, self.K, self.B, self.C)
-
+        output_fd = self.module.part_conv_gpu(input_fd_gpu, self.fdl_gpu, self.filters_fd_gpu, self.fdl_cursor)
         return output_fd.cpu()  # Move the output back to the CPU

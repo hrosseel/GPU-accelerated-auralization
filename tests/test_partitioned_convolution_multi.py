@@ -121,7 +121,7 @@ def test_dual_channels_gpu():
     for input_idx, input_batch in enumerate(signal_batch):
         output = pc.convolve(input_batch)
         np.testing.assert_allclose(
-            output, true_output[input_idx * B:(input_idx + 1) * B],
+            output, true_output[input_idx * B:(input_idx + 1) * B, :],
             atol=1e-5, rtol=1e-5)
 
 
@@ -221,4 +221,4 @@ def test_multi_channels_gpu():
 
 if __name__ == "__main__":
 #    pytest.main()
-    test_multi_channels_multi_input_cpu()
+    test_dual_channels_gpu()
