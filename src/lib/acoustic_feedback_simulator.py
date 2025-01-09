@@ -36,5 +36,6 @@ class AcousticFeedbackSimulator:
         for i in range(self.num_fb_channels):
             feedback_block = np.convolve(input_block[0, :], self.fb_filter[i, :], mode='full')
             self.fb_buffer[i, self.block_cursor:self.block_cursor + feedback_block.shape[0]] += feedback_block
+        output = self.fb_buffer[:, self.block_cursor:self.block_cursor + self.block_length]
         self.block_cursor += self.block_length
-        return self.fb_buffer[:, self.block_cursor:self.block_cursor + self.block_length]
+        return output

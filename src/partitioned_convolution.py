@@ -43,20 +43,22 @@ cpp_src = "torch::Tensor part_conv_gpu(torch::Tensor input_fd, torch::Tensor fdl
 
 # Multi-threaded CPU implementation of the complex multiplication
 # ================================================================
-@njit(complex64[:, ::1](complex64[:, :, :], complex64[:, :, ::1], int64, complex64[:, :, ::1]), parallel=True)
+# @njit(complex64[:, ::1](complex64[:, :, :], complex64[:, :, ::1], int64, complex64[:, :, ::1]), parallel=True)
+# @njit(complex64[:, ::1](complex64[:, :, :], complex64[:, :, ::1], int64, complex64[:, :, ::1]))  # parallel=True doesn't work on MacOS
 def cpu_multiply(filters_fd: np.ndarray, fdl: np.ndarray, fdl_cursor: int, temp_buffer: np.ndarray) -> np.ndarray:
     filter_channels, _, K = filters_fd.shape
     for k in prange(K):
-        cursor = (fdl_cursor - k) % K
+        cursor = (K + (fdl_cursor - k)) % K
         temp_buffer[k, :, :] = filters_fd[:, :, k] * fdl[:, :, cursor]
     return temp_buffer.sum(axis=0)
 
 
-@njit(complex64[:, ::1](complex64[:, :, :], complex64[:, :, ::1], int64, complex64[:, :, ::1]), parallel=True)
+# @njit(complex64[:, ::1](complex64[:, :, :], complex64[:, :, ::1], int64, complex64[:, :, ::1]), parallel=True)
+# @njit(complex64[:, ::1](complex64[:, :, :], complex64[:, :, ::1], int64, complex64[:, :, ::1])) # parallel=True doesn't work on MacOS
 def cpu_multiply_single_input(filters_fd: np.ndarray, fdl: np.ndarray, fdl_cursor: int, temp_buffer: np.ndarray) -> np.ndarray:
     K = filters_fd.shape[2]
     for k in prange(K):
-        cursor = (fdl_cursor - k) % K
+        cursor = (K + (fdl_cursor - k)) % K
         temp_buffer[k, :, :] = filters_fd[:, :, k] * fdl[0, :, cursor]
     return temp_buffer.sum(axis=0)
 # ================================================================
@@ -115,12 +117,15 @@ class PartitionedConvolution:
             else:
                 raise ValueError(f"The input signal must be a 2D array with shape ({self.input_C}, {self.B}).")
         
-        if signal.dtype not in [np.float32, torch.float32]:
-            raise ValueError("The input signal must be of type float32.")
+        if signal.dtype != torch.float32:
+            if signal.dtype == np.float32:
+                signal = torch.tensor(signal)
+            else:
+                raise ValueError("The input signal must be of type float32.")
 
         # Put the incoming signal in the input buffer after sliding the previous signal
         self.input_buffer_td[:, :self.B] = self.input_buffer_td[:, self.B:]
-        self.input_buffer_td[:, self.B:] = torch.tensor(signal)
+        self.input_buffer_td[:, self.B:] = signal
 
         # Compute the RFFT of the signals (real-to-complex FFT)
         input_fd = torch.fft.rfft(self.input_buffer_td, dim=1)  # shape: (input_C, B + 1)
@@ -149,7 +154,7 @@ class PartitionedConvolution:
         # create filter partitions
         remainder = self.K * self.B - self.FL
         filter_parts = np.pad(filter_td, ((0, 0), (0, remainder)), mode='constant'
-                              ).reshape(self.C, self.B, self.K, order='F')
+                              ).reshape((self.C, self.B, self.K), order='F')
 
         # Partition the filter into blocks of length B, and zero-pad another B samples
         filters_padded = np.pad(
@@ -157,7 +162,7 @@ class PartitionedConvolution:
 
         # Compute the RFFT of the filters (real-to-complex FFT)
         # Note: torch.fft.rfft messes up the ordering (F-contiguous) of the array
-        return torch.from_numpy(np.fft.rfft(filters_padded, axis=1))  # shape: (K, B + 1, C)
+        return torch.from_numpy(np.fft.rfft(filters_padded, axis=1).astype(np.complex64))  # shape: (K, B + 1, C)
         
 
     def __perform_convolution__(self, input_fd: torch.Tensor | np.ndarray) -> torch.Tensor:

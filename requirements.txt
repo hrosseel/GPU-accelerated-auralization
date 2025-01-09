@@ -1,0 +1,7 @@
+numpy
+matplotlib
+scipy
+torch
+numba
+pytest
+setuptools

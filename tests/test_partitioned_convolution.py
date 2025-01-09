@@ -19,7 +19,7 @@ def test_single_channel_cpu():
     pc = PartitionedConvolutionCPU(filters_td, B)
 
     # Define the signal batch
-    signal = np.random.randn(B * 10)
+    signal = np.random.randn(B * 10).astype(np.float32)
     signal_batch = np.pad(signal, (0, int(np.ceil(FL / B) * B)),
                           mode='constant').reshape(-1, B)
 
@@ -27,7 +27,7 @@ def test_single_channel_cpu():
     true_output = np.pad(true_output, (0, B), mode='constant')
 
     for input_idx, input_batch in enumerate(signal_batch):
-        output = pc.convolve(input_batch)[:, 0]
+        output = pc.convolve(input_batch)[0, :]
         np.testing.assert_allclose(
             output, true_output[input_idx * B:(input_idx + 1) * B], atol=1e-5, rtol=1e-5)
 
@@ -46,7 +46,7 @@ def test_single_channel_gpu():
     pc = PartitionedConvolutionGPU(filters_td, B)
 
     # Define the signal batch
-    signal = np.random.randn(B * 10)
+    signal = np.random.randn(B * 10).astype(np.float32)
     signal_batch = np.pad(signal, (0, int(np.ceil(FL / B) * B)),
                           mode='constant').reshape(-1, B)
 
@@ -54,7 +54,7 @@ def test_single_channel_gpu():
     true_output = np.pad(true_output, (0, B), mode='constant')
 
     for input_idx, input_batch in enumerate(signal_batch):
-        output = pc.convolve(input_batch)[:, 0]
+        output = pc.convolve(input_batch)[0, :]
         np.testing.assert_allclose(
             output, true_output[input_idx * B:(input_idx + 1) * B], atol=1e-5, rtol=1e-5)
 
@@ -74,21 +74,21 @@ def test_dual_channels_cpu():
     pc = PartitionedConvolutionCPU(filters_td, B)
     
     # Define the signal batch
-    signal = np.random.randn(B * 10)
+    signal = np.random.randn(B * 10).astype(np.float32)
     signal_batch = np.pad(signal, (0, int(K * B)),
                           mode='constant').reshape(-1, B)
 
     output_len = len(signal) + FL - 1
 
-    true_output = np.zeros((output_len + B, C))
+    true_output = np.zeros((C, output_len + B))
     for c in range(C):
-        true_output[:output_len, c] = convolve(
+        true_output[c, :output_len] = convolve(
             signal, filters_td[c, :], mode='full')
 
     for input_idx, input_batch in enumerate(signal_batch):
         output = pc.convolve(input_batch)
         np.testing.assert_allclose(
-            output, true_output[input_idx * B:(input_idx + 1) * B],
+            output, true_output[:, input_idx * B:(input_idx + 1) * B],
             atol=1e-5, rtol=1e-5)
 
 
@@ -107,21 +107,21 @@ def test_dual_channels_gpu():
     pc = PartitionedConvolutionGPU(filters_td, B)
 
     # Define the signal batch
-    signal = np.random.randn(B * 10)
+    signal = np.random.randn(B * 10).astype(np.float32)
     signal_batch = np.pad(signal, (0, int(K * B)),
                           mode='constant').reshape(-1, B)
 
     output_len = len(signal) + FL - 1
 
-    true_output = np.zeros((output_len + B, C))
+    true_output = np.zeros((C, output_len + B))
     for c in range(C):
-        true_output[:output_len, c] = convolve(
+        true_output[c, :output_len] = convolve(
             signal, filters_td[c, :], mode='full')
 
     for input_idx, input_batch in enumerate(signal_batch):
         output = pc.convolve(input_batch)
         np.testing.assert_allclose(
-            output, true_output[input_idx * B:(input_idx + 1) * B, :],
+            output, true_output[:, input_idx * B:(input_idx + 1) * B],
             atol=1e-5, rtol=1e-5)
 
 
@@ -138,21 +138,21 @@ def test_multi_channels_cpu():
     pc = PartitionedConvolutionCPU(filters_td, B)
 
     # Define the signal batch
-    signal = np.random.randn(B * I)
+    signal = np.random.randn(B * I).astype(np.float32)
     signal_batch = np.pad(signal, (0, int(K * B)),
                           mode='constant').reshape(-1, B)
 
     output_len = len(signal) + FL - 1
 
-    true_output = np.zeros((output_len + B, C))
+    true_output = np.zeros((C, output_len + B))
     for c in range(C):
-        true_output[:output_len, c] = convolve(
+        true_output[c, :output_len] = convolve(
             signal, filters_td[c, :], mode='full')
 
     for input_idx, input_batch in enumerate(signal_batch):
         output = pc.convolve(input_batch)
         np.testing.assert_allclose(
-            output, true_output[input_idx * B:(input_idx + 1) * B],
+            output, true_output[:, input_idx * B:(input_idx + 1) * B],
             atol=5e-4, rtol=5e-4)
 
 
@@ -172,21 +172,21 @@ def test_multi_channels_gpu():
     pc = PartitionedConvolutionGPU(filters_td, B)
 
     # Define the signal batch
-    signal = np.random.randn(B * I)
+    signal = np.random.randn(B * I).astype(np.float32)
     signal_batch = np.pad(signal, (0, int(K * B)),
                           mode='constant').reshape(-1, B)
 
     output_len = len(signal) + FL - 1
 
-    true_output = np.zeros((output_len + B, C))
+    true_output = np.zeros((C, output_len + B))
     for c in range(C):
-        true_output[:output_len, c] = convolve(
+        true_output[c, :output_len] = convolve(
             signal, filters_td[c, :], mode='full')
 
     for input_idx, input_batch in enumerate(signal_batch):
         output = pc.convolve(input_batch)
         np.testing.assert_allclose(
-            output, true_output[input_idx * B:(input_idx + 1) * B],
+            output, true_output[:, input_idx * B:(input_idx + 1) * B],
             atol=5e-4, rtol=5e-4)
 
 
@@ -200,27 +200,26 @@ def test_multi_channels_multi_input_cpu():
     C = 100
     FL = B * 100
     I = 10
-    K = np.ceil(FL / B).astype(int)
 
     filters_td = np.random.randn(C * FL).astype(np.float32)
     filters_td = filters_td.reshape(C, FL, order='C')
     pc = PartitionedConvolutionCPU(filters_td, B, num_input_channels=C)
 
     # Define the signal batch
-    signal = np.random.randn(C, B * I)
+    signal = np.random.randn(C, B * I).astype(np.float32)
     signal_batch = signal.reshape(C, I, B).swapaxes(0, 1)
 
     output_len = signal.shape[1] + FL - 1
 
-    true_output = np.zeros((output_len + B, C))
+    true_output = np.zeros((C, output_len + B))
     for c in range(C):
-        true_output[:output_len, c] = convolve(
+        true_output[c, :output_len] = convolve(
             signal[c, :], filters_td[c, :], mode='full')
 
     for input_idx, input_batch in enumerate(signal_batch):
         output = pc.convolve(input_batch)
         np.testing.assert_allclose(
-            output, true_output[input_idx * B:(input_idx + 1) * B, :],
+            output, true_output[:, input_idx * B:(input_idx + 1) * B],
             atol=5e-4, rtol=5e-4)
 
 
@@ -236,19 +235,19 @@ def test_multi_channels_multi_input_gpu():
     pc = PartitionedConvolutionGPU(filters_td, B, num_input_channels=C)
 
     # Define the signal batch
-    signal = np.random.randn(C, B * I)
+    signal = np.random.randn(C, B * I).astype(np.float32)
     signal_batch = signal.reshape(C, I, B).swapaxes(0, 1)
 
     output_len = signal.shape[1] + FL - 1
 
-    true_output = np.zeros((output_len + B, C))
+    true_output = np.zeros((C, output_len + B))
     for c in range(C):
-        true_output[:output_len, c] = convolve(
+        true_output[c, :output_len] = convolve(
             signal[c, :], filters_td[c, :], mode='full')
 
     for input_idx, input_batch in enumerate(signal_batch):
         output = pc.convolve(input_batch)
         np.testing.assert_allclose(
-            output, true_output[input_idx * B:(input_idx + 1) * B, :],
+            output, true_output[:, input_idx * B:(input_idx + 1) * B],
             atol=5e-4, rtol=5e-4)
 
