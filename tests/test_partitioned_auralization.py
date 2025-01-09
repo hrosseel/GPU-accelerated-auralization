@@ -55,7 +55,9 @@ def test_single_channel_feedback(setup_method):
     C = 1
     FL_AUR = 1024
 
-    aur_filter_td = torch.randn(C, FL_AUR, dtype=dtype)
+    aur_filter_td = torch.zeros(C, FL_AUR, dtype=dtype)
+    aur_filter_td[:, 0] = 1.
+    
     fc_filter_td = torch.randn(C, FL_AUR, dtype=dtype)  # Feedback
     input_block_td = torch.randn(1, block_length_samples, dtype=dtype)
 
@@ -70,11 +72,11 @@ def test_single_channel_feedback(setup_method):
     np.testing.assert_allclose(output.numpy().flatten(), expected_output_blocks[0], rtol=1e-3, atol=1e-3)
 
     # Set up AcousticFeedbackSimulator
-    fb_simulator = AcousticFeedbackSimulator(fc_filter_td.numpy(), block_length_samples, expected_output_blocks)
+    fb_simulator = AcousticFeedbackSimulator(fc_filter_td.numpy(), block_length_samples, expected_output_blocks.shape[0])
 
     # Check that the output is the same for the next blocks
-    for output_block in expected_output_blocks[1:]:
+    for ref_output_block in expected_output_blocks[1:]:
         # Simulate the feedback path
-        feedback_block = fb_simulator.simulate(output_block)
-        output = pa.auralization(feedback_block)
+        input_block = fb_simulator.simulate(output)
+        output = pa.auralization(input_block)
         np.testing.assert_allclose(output.numpy().flatten(), ref_output_block, rtol=1e-3, atol=1e-3)

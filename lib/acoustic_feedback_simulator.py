@@ -18,7 +18,7 @@ class AcousticFeedbackSimulator:
         self.num_fb_channels, self.fb_length = fb_filter.shape
     
         self.block_length = block_length
-        self.fb_buffer = np.zeros((self.num_fb_channels, fb_filter.shape[0] + block_length * num_blocks))
+        self.fb_buffer = np.zeros((self.num_fb_channels, fb_filter.shape[1] + block_length * num_blocks))
         self.num_blocks = num_blocks
         self.block_cursor = 0
 
@@ -34,7 +34,7 @@ class AcousticFeedbackSimulator:
             raise ValueError('Maximum number of blocks reached.')
 
         for i in range(self.num_fb_channels):
-            feedback_block = np.convolve(input_block, self.fb_filter[i, :], mode='full')
+            feedback_block = np.convolve(input_block[0, :], self.fb_filter[i, :], mode='full')
             self.fb_buffer[i, self.block_cursor:self.block_cursor + feedback_block.shape[0]] += feedback_block
         self.block_cursor += self.block_length
         return self.fb_buffer[:, self.block_cursor:self.block_cursor + self.block_length]
