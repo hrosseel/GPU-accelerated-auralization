@@ -3,3 +3,6 @@ __pycache__
 .venv
 .pyenv
 *.egg-info
+*.log
+*.json
+*.pdf

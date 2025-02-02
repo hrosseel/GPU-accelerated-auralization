@@ -15,7 +15,7 @@ import torch
 
 # Set the TORCH_CUDA_ARCH_LIST environment variable
 os.environ['TORCH_CUDA_ARCH_LIST'] = '8.6'
-os.environ['CUDA_LAUNCH_BLOCKING']='1'
+# os.environ['CUDA_LAUNCH_BLOCKING']='1'
 
 from torch.utils.cpp_extension import load_inline
 
@@ -23,6 +23,7 @@ from torch.utils.cpp_extension import load_inline
 # Load the CUDA code
 # ================================================================
 def load_cuda(cuda_src, cpp_src, funcs, extra_cuda_cflags=[], verbose=False):
+    random_id = np.random.randint(0, 1e6)
     """
     Load the CUDA code
     """
@@ -32,7 +33,7 @@ def load_cuda(cuda_src, cpp_src, funcs, extra_cuda_cflags=[], verbose=False):
         functions=funcs,
         extra_cuda_cflags=["-O2"] + extra_cuda_cflags,
         verbose=verbose,
-        name="inline_ext"
+        name=f"inline_ext_{random_id}"
     )
 
 # Load CUDA code from file "cuda/kernel.cu"
@@ -43,8 +44,7 @@ cpp_src = "torch::Tensor part_conv_gpu(torch::Tensor input_fd, torch::Tensor fdl
 
 # Multi-threaded CPU implementation of the complex multiplication
 # ================================================================
-# @njit(complex64[:, ::1](complex64[:, :, :], complex64[:, :, ::1], int64, complex64[:, :, ::1]), parallel=True)
-# @njit(complex64[:, ::1](complex64[:, :, :], complex64[:, :, ::1], int64, complex64[:, :, ::1]))  # parallel=True doesn't work on MacOS
+@njit(complex64[:, ::1](complex64[:, :, :], complex64[:, :, ::1], int64, complex64[:, :, ::1]), parallel=True)
 def cpu_multiply(filters_fd: np.ndarray, fdl: np.ndarray, fdl_cursor: int, temp_buffer: np.ndarray) -> np.ndarray:
     filter_channels, _, K = filters_fd.shape
     for k in prange(K):
@@ -53,8 +53,7 @@ def cpu_multiply(filters_fd: np.ndarray, fdl: np.ndarray, fdl_cursor: int, temp_
     return temp_buffer.sum(axis=0)
 
 
-# @njit(complex64[:, ::1](complex64[:, :, :], complex64[:, :, ::1], int64, complex64[:, :, ::1]), parallel=True)
-# @njit(complex64[:, ::1](complex64[:, :, :], complex64[:, :, ::1], int64, complex64[:, :, ::1])) # parallel=True doesn't work on MacOS
+@njit(complex64[:, ::1](complex64[:, :, :], complex64[:, :, ::1], int64, complex64[:, :, ::1]), parallel=True)
 def cpu_multiply_single_input(filters_fd: np.ndarray, fdl: np.ndarray, fdl_cursor: int, temp_buffer: np.ndarray) -> np.ndarray:
     K = filters_fd.shape[2]
     for k in prange(K):
@@ -225,7 +224,7 @@ class PartitionedConvolutionGPU(PartitionedConvolution):
         if self.input_C == self.C:
             extra_cuda_cflags.append("-DMULTI_INPUT")  # Use multi-input mode
 
-        self.module = load_cuda(cuda_src, cpp_src, ['part_conv_gpu'], extra_cuda_cflags, verbose=True)
+        self.module = load_cuda(cuda_src, cpp_src, ['part_conv_gpu'], extra_cuda_cflags)
 
         # Load the filters to the GPU
         self.filters_fd_gpu = self.filters_fd.to('cuda').type(torch.complex64).contiguous()
