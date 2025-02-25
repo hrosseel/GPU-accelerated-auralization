@@ -4,7 +4,7 @@ Partitioned Convolution
 This module implements a partitioned convolution algorithm for real-time systems. The algorithm
 is based on the partitioned convolution theorem, which states that the convolution of two signals
 can be computed by partitioning the signals into blocks and performing the convolution in the
-frequency domain, which allows for efficient computation of the convolution by exploiting the
+frequency-domain, which allows for efficient computation of the convolution by exploiting the
 parallel structure of the algorithm.
 """
 import os
@@ -136,7 +136,7 @@ class PartitionedConvolution:
         :param signal: The input signal (shape: (C, B))
         :return: The output signal (shape: (C, B + 1))
         """
-        # Transform the input signal to the frequency domain
+        # Transform the input signal to the frequency-domain
         signal_fd = self.__parse_input__(signal_td)
 
         # Perform the actual convolution
