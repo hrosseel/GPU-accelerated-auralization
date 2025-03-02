@@ -52,11 +52,11 @@ def test_single_channel_no_feedback(setup_method):
 
     pa = PartitionedAuralization(aur_filter_td, fc_filter_td, block_length_samples, device)
 
-    output = pa.auralization(input_block_td)
+    output = pa.auralize(input_block_td)
     np.testing.assert_allclose(output.numpy().flatten(), expected_output_blocks[0], rtol=1e-4, atol=1e-4)
     # Check that the output is the same for the next blocks
     for ref_output_block in expected_output_blocks[1:]:
-        output = pa.auralization(torch.zeros_like(input_block_td))
+        output = pa.auralize(torch.zeros_like(input_block_td))
         np.testing.assert_allclose(output.numpy().flatten(), ref_output_block, rtol=1e-4, atol=1e-4)
 
 
@@ -80,14 +80,14 @@ def test_single_channel_feedback(setup_method):
     fb_simulator = AcousticFeedbackSimulator(fc_filter_td.numpy(), block_length_samples, expected_output_blocks.shape[0])
 
     # Auralize the first block
-    output = pa.auralization(input_block_td)
+    output = pa.auralize(input_block_td)
     np.testing.assert_allclose(output.numpy().flatten(), expected_output_blocks[0], rtol=1e-3, atol=1e-3)
 
     # Check that the output is the same for the next blocks (assuming perfect feedback cancellation, with zero input)
     for ref_output_block in expected_output_blocks[1:]:
         # Simulate the feedback path
         input_block = fb_simulator.simulate(output)
-        output = pa.auralization(input_block)
+        output = pa.auralize(input_block)
         np.testing.assert_allclose(output.numpy().flatten(), ref_output_block, rtol=1e-2, atol=1e-2)
 
 
@@ -110,11 +110,11 @@ def test_multi_channel_no_feedback(setup_method):
 
     pa = PartitionedAuralization(aur_filter_td, fc_filter_td, block_length_samples, device)
 
-    output = pa.auralization(input_block_td)
+    output = pa.auralize(input_block_td)
     np.testing.assert_allclose(output, expected_output_blocks[0], rtol=1e-3, atol=1e-3)
     # Check that the output is the same for the next blocks
     for ref_output_block in expected_output_blocks[1:]:
-        output = pa.auralization(torch.zeros_like(input_block_td))
+        output = pa.auralize(torch.zeros_like(input_block_td))
         np.testing.assert_allclose(output.numpy(), ref_output_block, rtol=1e-2, atol=1e-2)
 
 
@@ -142,12 +142,12 @@ def test_multi_channel_feedback(setup_method):
     fb_simulator = AcousticFeedbackSimulator(fc_filter_td.numpy(), block_length_samples, num_blocks)
 
     # Auralize the first block
-    output = pa.auralization(input_block_td)
+    output = pa.auralize(input_block_td)
     output_buffer[:, :block_length_samples] = output.numpy()
 
     for i in range(1, num_blocks):
         input_block = fb_simulator.simulate(output).sum(axis=0)
-        output = pa.auralization(input_block)
+        output = pa.auralize(input_block)
         output_buffer[:, i * block_length_samples:(i + 1) * block_length_samples] = output.numpy()
 
     assert (calc_NMSE(output_buffer, expected_output) < 1e-3).all()

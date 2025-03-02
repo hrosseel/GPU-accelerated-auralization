@@ -33,7 +33,7 @@ class PartitionedAuralization:
         """
         Initialize the partitioned auralization class
         :param aur_filter_td: The auralization filter in the time domain (shape: (C, FL_AUR))
-        :param fc_filter_td: The feedback cancelation filter in the time domain (shape: (L, FL_FC))
+        :param fc_filter_td: The feedback cancelation filter in the time domain (shape: (C, FL_FC))
         :param block_length_samples: The block length B
         :param device: The device to use ('cpu' or 'gpu')
         """
@@ -64,7 +64,7 @@ class PartitionedAuralization:
         # Set feedback estimate to zero
         self.feedback_est_td = torch.zeros(1, self.B, dtype=torch.float32)
 
-    def auralization(self, signal_td: np.ndarray) -> np.ndarray:
+    def auralize(self, signal_td: np.ndarray) -> np.ndarray:
         """
         Perform the auralization by removing the feedback path from the input and performing convolution with the auralization filter. The feedback path is estimated using the feedback cancelation filter.
     

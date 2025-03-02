@@ -33,12 +33,12 @@ def prepare_benchmark(block_size: int = 256, input_length: int = FS * 1,
 def benchmark(pa: PartitionedAuralization, signal_batch: np.ndarray, warmup_it: int = 10) -> list:
     # Warm-up
     for _ in range(warmup_it):
-        pa.auralization(np.zeros(pa.B).astype(np.float32))
+        pa.auralize(np.zeros(pa.B).astype(np.float32))
 
     log = []
     for input_batch in signal_batch:
         start_time = time.perf_counter()
-        _ = pa.auralization(input_batch)
+        _ = pa.auralize(input_batch)
         end_time = time.perf_counter()
         log.append(end_time - start_time)
     return log
