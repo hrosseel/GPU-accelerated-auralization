@@ -6,7 +6,7 @@ Authors: Hannes Rosseel and Toon van Waterschoot.
 
 ## How to use the code
 
-The code is written in Python 3.11. The required packages are listed in requirements.txt. To install the required packages, run the following command:
+The code is written in Python 3.13.1. The required packages are listed in requirements.txt. To install the required packages, run the following command:
 
 ```bash
 pip install -r requirements.txt 
