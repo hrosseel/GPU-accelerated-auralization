@@ -46,7 +46,7 @@ cgexec -g cpuset:realtime_app python benchmarks/benchmark_part_conv.py
 If you use this code in your research, consider citing the repository and the preprint below:
 ```
 @unpublished{rosseel2025gpu,
-  title={GPU-Accelerated Interactive Auralization of Historical Worship Space Acoustics},
+  title={GPU-Accelerated Interactive Acoustic Auralization},
   author={Rosseel, Hannes and van Waterschoot, Toon},
   note={unpublished},
   year={2025},
