@@ -1,6 +1,6 @@
-# GPU-Accelerated Interactive Auralization of Historical Worship Space Acoustics
+# GPU-Accelerated Interactive Acoustic Auralization
 
-This repository contains the code for the paper "GPU-Accelerated Interactive Auralization of Historical Worship Space Acoustics".
+This repository contains the code for the paper "GPU-Accelerated Interactive Acoustic Auralization".
 
 Authors: Hannes Rosseel and Toon van Waterschoot.
 
