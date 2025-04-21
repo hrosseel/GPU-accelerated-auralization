@@ -23,10 +23,10 @@ from torch.utils.cpp_extension import load_inline
 # Load the CUDA code
 # ================================================================
 def load_cuda(cuda_src, cpp_src, funcs, extra_cuda_cflags=[], verbose=False):
+    """
+        Load the CUDA code
+    """
     random_id = np.random.randint(0, 1e6)
-    """
-    Load the CUDA code
-    """
     return load_inline(
         cuda_sources=[cuda_src],
         cpp_sources=[cpp_src],
@@ -38,15 +38,15 @@ def load_cuda(cuda_src, cpp_src, funcs, extra_cuda_cflags=[], verbose=False):
 
 # Load CUDA code from file "cuda/kernel.cu"
 cuda_code_path = os.path.join(os.path.dirname(__file__), "kernel.cu")
-cuda_src = open(cuda_code_path, "r").read()
+cuda_src = open(cuda_code_path, "r", encoding="utf-8").read()
 cpp_src = "torch::Tensor part_conv_gpu(torch::Tensor input_fd, torch::Tensor fdl, torch::Tensor filters_fd, int fdl_cursor);"
-# ================================================================
 
+# ================================================================
 # Multi-threaded CPU implementation of the complex multiplication
 # ================================================================
 @njit(complex64[:, ::1](complex64[:, :, :], complex64[:, :, ::1], int64, complex64[:, :, ::1]), parallel=True)
 def cpu_multiply(filters_fd: np.ndarray, fdl: np.ndarray, fdl_cursor: int, temp_buffer: np.ndarray) -> np.ndarray:
-    filter_channels, _, K = filters_fd.shape
+    _, _, K = filters_fd.shape
     for k in prange(K):
         cursor = (K + (fdl_cursor - k)) % K
         temp_buffer[k, :, :] = filters_fd[:, :, k] * fdl[:, :, cursor]
@@ -64,15 +64,18 @@ def cpu_multiply_single_input(filters_fd: np.ndarray, fdl: np.ndarray, fdl_curso
 
 # Main class
 class PartitionedConvolution:
+    """
+    Partitioned Convolution class
+    """
 
     def __init__(self, filter_td: torch.Tensor, block_length_samples: int,
-                 num_input_channels: int = 1):
+                 num_input_channels: int = 1, device: str = 'cpu'):
         """
         Initialize the partitioned convolution class
         :param filter_td: The filter in the time domain (shape: (C, FL))
         :param block_length_samples: The block length B
         :param num_input_channels: The number of input channels (default: 1)
-        :param dtype: The data type
+        :param device: The device to use ('cpu' or 'gpu')
         """
         if filter_td.ndim != 2:
             raise ValueError(
@@ -82,6 +85,7 @@ class PartitionedConvolution:
         self.input_C = num_input_channels
         self.B = block_length_samples
         self.K = int(np.ceil(self.FL / self.B))
+        self.device = device
 
         # Validate if FL > B
         if self.FL < self.B:
@@ -98,6 +102,9 @@ class PartitionedConvolution:
             raise ValueError("The number of channels must be greater than 1.")
         if self.input_C not in [1, self.C]:
             raise ValueError("The number of input channels must be 1 or equal to the number of filter channels.")
+        # Validate the device
+        if device not in ['cpu', 'gpu']:
+            raise ValueError("The device must be either 'cpu' or 'gpu'.")
 
         # Create the filter blocks
         self.filters_fd = self.__create_filter_blocks__(filter_td)
@@ -132,7 +139,7 @@ class PartitionedConvolution:
 
     def convolve(self, signal_td: np.ndarray) -> np.ndarray:
         """
-        Perform the partitioned convolution
+        Perform the uniform partitioned convolution algorithm
         :param signal: The input signal (shape: (C, B))
         :return: The output signal (shape: (C, B + 1))
         """
@@ -141,7 +148,10 @@ class PartitionedConvolution:
 
         # Perform the actual convolution
         output_fd = self.__perform_convolution__(signal_fd)
-        self.fdl_cursor = (self.fdl_cursor + 1) % self.K  # Update the fdl_cursor
+        
+        if self.device == 'gpu':
+            # Move the output spectrum to the CPU
+            output_fd = output_fd.cpu()
 
         # Perform the inverse RFFT to obtain the output signal
         output_td = torch.fft.irfft(output_fd, axis=1)  # shape: (C, 2 * B)
@@ -190,7 +200,6 @@ class PartitionedConvolutionCPU(PartitionedConvolution):
 
 
     def __perform_convolution__(self, input_fd: torch.Tensor | np.ndarray) -> torch.Tensor:
-
         if isinstance(input_fd, torch.Tensor):
             input_fd = input_fd.numpy().astype(np.complex64)
 
@@ -202,6 +211,9 @@ class PartitionedConvolutionCPU(PartitionedConvolution):
             output_fd = cpu_multiply_single_input(self.filters_fd, self.fdl, self.fdl_cursor, self.temp_buffer)
         else:
             output_fd = cpu_multiply(self.filters_fd, self.fdl, self.fdl_cursor, self.temp_buffer)
+        # Update the fdl_cursor
+        self.fdl_cursor = (self.fdl_cursor + 1) % self.K
+        
         return torch.from_numpy(output_fd)
 
 
@@ -217,7 +229,8 @@ class PartitionedConvolutionGPU(PartitionedConvolution):
         :param block_length_samples: The block length B
         :param num_input_channels: The number of input channels (default: 1)
         """
-        PartitionedConvolution.__init__(self, filter_td, block_length_samples, num_input_channels=num_input_channels)
+        PartitionedConvolution.__init__(self, filter_td, block_length_samples, num_input_channels=num_input_channels,
+                                        device='gpu')
 
         # Compile CUDA code with specific flags for better performance
         extra_cuda_cflags = [f"-DNUM_CHANNELS={self.C}", f"-DBLOCK_SIZE={self.B}", f"-DNUM_PARTS={self.K}"]
@@ -232,8 +245,11 @@ class PartitionedConvolutionGPU(PartitionedConvolution):
         self.fdl_gpu = self.fdl.to('cuda').type(torch.complex64).contiguous()
 
     def __perform_convolution__(self, input_fd: torch.Tensor) -> torch.Tensor:
-        # Move the input spectrum to the GPU
+        # Move the input spectrum to the GPU if not already there
         input_fd_gpu = input_fd.to('cuda').type(torch.complex64).contiguous()
         # Perform the convolution on the GPU
         output_fd = self.module.part_conv_gpu(input_fd_gpu, self.fdl_gpu, self.filters_fd_gpu, self.fdl_cursor)
-        return output_fd.cpu()  # Move the output back to the CPU
+        # Update the fdl_cursor
+        self.fdl_cursor = (self.fdl_cursor + 1) % self.K
+        
+        return output_fd

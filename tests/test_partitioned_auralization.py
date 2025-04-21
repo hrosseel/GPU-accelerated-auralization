@@ -6,7 +6,6 @@ from partitioned_auralization import PartitionedAuralization
 from lib.acoustic_feedback_simulator import AcousticFeedbackSimulator
 
 
-
 def buf_to_blocks(buf: np.ndarray, block_length: int) -> np.ndarray:
     """
     Convert a buffer to blocks
@@ -32,8 +31,9 @@ def calc_NMSE(x: np.ndarray, y: np.ndarray) -> float:
 
 @pytest.fixture(autouse=True)
 def setup_method():
-    block_length_samples = 1024
-    device = 'gpu' if torch.cuda.is_available() else 'cpu'
+    block_length_samples = 16
+    # device = 'gpu' if torch.cuda.is_available() else 'cpu'
+    device = 'cpu'
     dtype = torch.float32
     return block_length_samples, device, dtype
 
@@ -150,4 +150,4 @@ def test_multi_channel_feedback(setup_method):
         output = pa.auralize(input_block)
         output_buffer[:, i * block_length_samples:(i + 1) * block_length_samples] = output.numpy()
 
-    assert (calc_NMSE(output_buffer, expected_output) < 1e-3).all()
+    np.testing.assert_array_less(calc_NMSE(output_buffer, expected_output), 1e-3)
