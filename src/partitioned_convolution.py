@@ -69,11 +69,12 @@ class PartitionedConvolution:
     """
 
     def __init__(self, filter_td: torch.Tensor, block_length_samples: int,
-                 num_input_channels: int = 1, device: str = 'cpu'):
+                 fft_size: int = None, num_input_channels: int = 1, device: str = 'cpu'):
         """
         Initialize the partitioned convolution class
         :param filter_td: The filter in the time domain (shape: (C, FL))
         :param block_length_samples: The block length B
+        :param fft_size: The desired FFT size (optional), if not provided, it will be set to 2 * B
         :param num_input_channels: The number of input channels (default: 1)
         :param device: The device to use ('cpu' or 'gpu')
         """
@@ -85,6 +86,7 @@ class PartitionedConvolution:
         self.input_C = num_input_channels
         self.B = block_length_samples
         self.K = int(np.ceil(self.FL / self.B))
+        self.fft_size = fft_size if fft_size is not None else 2 * self.B
         self.device = device
 
         # Validate if FL > B
@@ -94,6 +96,10 @@ class PartitionedConvolution:
         # validate block length
         if self.B < 1:
             raise ValueError("The block length must be greater than 1.")
+        # Validate the FFT size
+        if self.fft_size < 2 * self.B:
+            raise ValueError(
+                "The FFT size must be greater than or equal to 2 * block length.")
         # Validate the filter length
         if self.FL < 1:
             raise ValueError("The filter length must be greater than 1.")
@@ -106,14 +112,18 @@ class PartitionedConvolution:
         if device not in ['cpu', 'gpu']:
             raise ValueError("The device must be either 'cpu' or 'gpu'.")
 
+        # Set number of frequency bins = fft_size // 2 + 1 (for real-to-complex FFT)
+        self.num_bins = self.fft_size // 2 + 1
+
         # Create the filter blocks
-        self.filters_fd = self.__create_filter_blocks__(filter_td)
+        self.filters_fd = self.__create_filter_blocks__(filter_td)  # shape: (K, num_bins, C)
+        
         # Initialize the frequency-domain delay line (FDL)
-        self.fdl = torch.zeros((self.input_C, self.B + 1, self.K), dtype=torch.complex64)
+        self.fdl = torch.zeros((self.input_C, self.num_bins, self.K), dtype=torch.complex64)
         self.fdl_cursor = 0
 
         # Initialize the input buffers
-        self.input_buffer_td = torch.zeros(self.input_C, 2 * self.B)
+        self.input_buffer_td = torch.zeros(self.input_C, self.fft_size)
 
     def __parse_input__(self, signal: np.ndarray) -> None:
         # Validate the input signal
@@ -129,12 +139,14 @@ class PartitionedConvolution:
             else:
                 raise ValueError("The input signal must be of type float32.")
 
-        # Put the incoming signal in the input buffer after sliding the previous signal
-        self.input_buffer_td[:, :self.B] = self.input_buffer_td[:, self.B:]
-        self.input_buffer_td[:, self.B:] = signal
+        # Input packing:
+        # Shift the input buffer to the left by B samples
+        self.input_buffer_td = torch.roll(self.input_buffer_td, -self.B, dims=1)
+        # Fill the rightmost B samples with the new signal
+        self.input_buffer_td[:, -self.B:] = signal
 
         # Compute the RFFT of the signals (real-to-complex FFT)
-        input_fd = torch.fft.rfft(self.input_buffer_td, dim=1)  # shape: (input_C, B + 1)
+        input_fd = torch.fft.rfft(self.input_buffer_td, dim=1)  # shape: (input_C, num_bins)
         return input_fd
 
     def convolve(self, signal_td: np.ndarray) -> np.ndarray:
@@ -157,7 +169,7 @@ class PartitionedConvolution:
         output_td = torch.fft.irfft(output_fd, axis=1)  # shape: (C, 2 * B)
 
         # Only return the valid samples
-        return output_td[:, self.B:]
+        return output_td[:, -self.B:]
 
     def __create_filter_blocks__(self, filter_td: np.ndarray) -> torch.Tensor:
         # create filter partitions
@@ -165,13 +177,13 @@ class PartitionedConvolution:
         filter_parts = np.pad(filter_td, ((0, 0), (0, remainder)), mode='constant'
                               ).reshape((self.C, self.B, self.K), order='F')
 
-        # Partition the filter into blocks of length B, and zero-pad another B samples
+        # Partition the filter into blocks of length B, and zero-pad by (fft_size - B)
         filters_padded = np.pad(
-            np.array(filter_parts), ((0, 0), (0, self.B), (0, 0)), mode='constant')  # shape: (C, 2 * B, K)
+            np.array(filter_parts), ((0, 0), (0, self.fft_size - self.B), (0, 0)), mode='constant')  # shape: (C, fft_size, K)
 
         # Compute the RFFT of the filters (real-to-complex FFT)
         # Note: torch.fft.rfft messes up the ordering (F-contiguous) of the array
-        return torch.from_numpy(np.fft.rfft(filters_padded, axis=1).astype(np.complex64))  # shape: (K, B + 1, C)
+        return torch.from_numpy(np.fft.rfft(filters_padded, axis=1).astype(np.complex64))  # shape: (K, num_bins, C)
         
 
     def __perform_convolution__(self, input_fd: torch.Tensor | np.ndarray) -> torch.Tensor:
@@ -184,15 +196,19 @@ class PartitionedConvolutionCPU(PartitionedConvolution):
     """
     Partitioned Convolution implemented on the CPU
     """
-    def __init__(self, filter_td: torch.Tensor, block_length_samples: int, num_input_channels: int = 1):
+    def __init__(self, filter_td: torch.Tensor, block_length_samples: int,
+                 fft_size: int = None, num_input_channels: int = 1):
         """
         Initialize the partitioned convolution class
         :param filter_td: The filter in the time domain (shape: (C, FL))
         :param block_length_samples: The block length B
+        :param fft_size: The desired FFT size (optional), if not provided, it will be set to 2 * B
         :param num_input_channels: The number of input channels (default: 1)
         """
-        PartitionedConvolution.__init__(self, filter_td, block_length_samples, num_input_channels=num_input_channels)
-        self.temp_buffer = np.empty((self.K, self.C, self.B + 1), dtype=np.complex64)
+        PartitionedConvolution.__init__(self, filter_td, block_length_samples, fft_size=fft_size,
+                                        num_input_channels=num_input_channels)
+
+        self.temp_buffer = np.empty((self.K, self.C, self.num_bins), dtype=np.complex64)
 
         # Convert to numpy array
         self.fdl = self.fdl.numpy()
@@ -222,18 +238,20 @@ class PartitionedConvolutionGPU(PartitionedConvolution):
     """
     Partitioned Convolution implemented on the GPU
     """
-    def __init__(self, filter_td: torch.Tensor, block_length_samples: int, num_input_channels: int = 1):
+    def __init__(self, filter_td: torch.Tensor, block_length_samples: int, fft_size: int = None,
+                 num_input_channels: int = 1):
         """
         Initialize the partitioned convolution class
         :param filter_td: The filter in the time domain (shape: (C, FL))
         :param block_length_samples: The block length B
+        :param fft_size: The desired FFT size (optional), if not provided, it will be set to 2 * B
         :param num_input_channels: The number of input channels (default: 1)
         """
-        PartitionedConvolution.__init__(self, filter_td, block_length_samples, num_input_channels=num_input_channels,
-                                        device='gpu')
+        PartitionedConvolution.__init__(self, filter_td, block_length_samples, fft_size=fft_size,
+                                        num_input_channels=num_input_channels, device='gpu')
 
         # Compile CUDA code with specific flags for better performance
-        extra_cuda_cflags = [f"-DNUM_CHANNELS={self.C}", f"-DBLOCK_SIZE={self.B}", f"-DNUM_PARTS={self.K}"]
+        extra_cuda_cflags = [f"-DNUM_CHANNELS={self.C}", f"-DNUM_BINS={self.num_bins}", f"-DNUM_PARTS={self.K}"]
         if self.input_C == self.C:
             extra_cuda_cflags.append("-DMULTI_INPUT")  # Use multi-input mode
 

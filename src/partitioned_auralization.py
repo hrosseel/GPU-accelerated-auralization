@@ -50,18 +50,20 @@ class PartitionedAuralization:
         self.B = block_length_samples
         self.device = device
 
+        fft_size = 2 * self.B
+
         # Create the partitioned convolution objects
         if self.device == 'cpu':
-            self.pc_aur = PartitionedConvolutionCPU(aur_filter_td, block_length_samples, num_input_channels=1)
-            self.pc_fc = PartitionedConvolutionCPU(fc_filter_td, block_length_samples, num_input_channels=self.C)
+            self.pc_aur = PartitionedConvolutionCPU(aur_filter_td, block_length_samples, fft_size=fft_size, num_input_channels=1)
+            self.pc_fc = PartitionedConvolutionCPU(fc_filter_td, block_length_samples, fft_size=fft_size, num_input_channels=self.C)
         elif self.device == 'gpu':
-            self.pc_aur = PartitionedConvolutionGPU(aur_filter_td, block_length_samples, num_input_channels=1)
-            self.pc_fc = PartitionedConvolutionGPU(fc_filter_td, block_length_samples, num_input_channels=self.C)
+            self.pc_aur = PartitionedConvolutionGPU(aur_filter_td, block_length_samples, fft_size=fft_size, num_input_channels=1)
+            self.pc_fc = PartitionedConvolutionGPU(fc_filter_td, block_length_samples, fft_size=fft_size, num_input_channels=self.C)
         else:
             raise ValueError("The device must be either 'cpu' or 'gpu'.")
 
         # Initialize the input buffer
-        self.input_buffer_td = torch.zeros(1, 2 * block_length_samples, dtype=torch.float32)
+        self.input_buffer_td = torch.zeros(1, fft_size, dtype=torch.float32)
         # Set feedback estimate to zero
         self.feedback_est_td = torch.zeros(1, self.B, dtype=torch.float32)
 
@@ -86,27 +88,12 @@ class PartitionedAuralization:
 
         # subtract the feedback signal from the input signal
         signal_td = signal_td - self.feedback_est_td
-        # Transform the input signal to the frequency-domain
-        signal_fd = self.pc_aur.__parse_input__(signal_td)
-        
-        # Perform the convolution with the auralization filter
-        aur_output_fd = self.pc_aur.__perform_convolution__(signal_fd)
 
-        # Estimate the feedback signal directly from the frequency-domain output
-        # feedback_est_fd = self.pc_fc.__perform_convolution__(aur_output_fd)
+        # convolve with auralization filter
+        aur_output_td = self.pc_aur.convolve(signal_td)
 
-        if self.device == 'gpu':
-            # Move the auralization output to the CPU
-            aur_output_fd = aur_output_fd.cpu()
-            # Move the feedback estimate to the CPU
-            feedback_est_fd = feedback_est_fd.cpu()
-
-        # # Transform the auralization output back to the time-domain
-        aur_output_td = torch.fft.irfft(aur_output_fd, dim=1)[:, self.B:]
-        # Transform the feedback estimate back to the time-domain and update the feedback estimate
-        # self.feedback_est_td = torch.fft.irfft(feedback_est_fd, axis=1)[:, self.B:].sum(dim=0)
-
+        # Update the feedback estimation buffer
         self.feedback_est_td = self.pc_fc.convolve(aur_output_td).sum(dim=0)
-        
+
         # Return the auralization output
         return aur_output_td

@@ -9,8 +9,8 @@ using namespace torch::indexing;
 #ifndef NUM_CHANNELS
     #error "NUM_CHANNELS is not defined"
 #endif
-#ifndef BLOCK_SIZE
-    #error "BLOCK_SIZE is not defined"
+#ifndef NUM_BINS
+    #error "NUM_BINS is not defined"
 #endif
 #ifndef NUM_PARTS
     #error "NUM_PARTS is not defined"
@@ -25,21 +25,21 @@ __global__ void conv_kernel(const c10::complex<float>* fdl, const c10::complex<f
     
     const int thread_id = blockIdx.x * blockDim.x + threadIdx.x;
     
-    if (thread_id >= NUM_CHANNELS * (BLOCK_SIZE + 1)) return;
+    if (thread_id >= NUM_CHANNELS * NUM_BINS) return;
 
-    const int channel_id = thread_id / (BLOCK_SIZE + 1);
-    const int bin_id = thread_id % (BLOCK_SIZE + 1);
+    const int channel_id = thread_id / NUM_BINS;
+    const int bin_id = thread_id % NUM_BINS;
     int cursor = fdl_cursor;
 
     #ifdef MULTI_INPUT  // Multi-input mode  
-    const int fdl_offset = channel_id * ((BLOCK_SIZE + 1) * NUM_PARTS) + bin_id * NUM_PARTS;
+    const int fdl_offset = channel_id * (NUM_BINS * NUM_PARTS) + bin_id * NUM_PARTS;
     const int filter_offset = fdl_offset;
     #else  // Single-input mode
     const int fdl_offset = bin_id * NUM_PARTS;
-    const int filter_offset = channel_id * ((BLOCK_SIZE + 1) * NUM_PARTS) + bin_id * NUM_PARTS;
+    const int filter_offset = channel_id * (NUM_BINS * NUM_PARTS) + bin_id * NUM_PARTS;
     #endif
 
-    const int output_offset = channel_id * (BLOCK_SIZE + 1) + bin_id;
+    const int output_offset = channel_id * NUM_BINS + bin_id;
     c10::complex<float> out = 0;
 
     for (int k = 0; k < NUM_PARTS; ++k) {
@@ -55,12 +55,12 @@ torch::Tensor part_conv_gpu(torch::Tensor input_fd, torch::Tensor fdl, torch::Te
     CHECK_INPUT(fdl);
     CHECK_INPUT(filters_fd);
 
-    auto output_fd = torch::empty({NUM_CHANNELS, BLOCK_SIZE+1}, input_fd.options());
+    auto output_fd = torch::empty({NUM_CHANNELS, NUM_BINS}, input_fd.options());
 
-    int blocks = cdiv(NUM_CHANNELS * (BLOCK_SIZE + 1), NUM_THREADS);
+    int blocks = cdiv(NUM_CHANNELS * NUM_BINS, NUM_THREADS);
 
     // Store the fd signal in a frequency-domain delay line
-    fdl.index_put_({Slice(), Slice(0, BLOCK_SIZE + 1), fdl_cursor}, input_fd);
+    fdl.index_put_({Slice(), Slice(0, NUM_BINS), fdl_cursor}, input_fd);
 
     // Perform the convolution
     conv_kernel<<<blocks, NUM_THREADS>>>(fdl.data_ptr<c10::complex<float>>(), filters_fd.data_ptr<c10::complex<float>>(), fdl_cursor, output_fd.data_ptr<c10::complex<float>>());

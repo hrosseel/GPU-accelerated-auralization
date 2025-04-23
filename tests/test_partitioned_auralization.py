@@ -32,8 +32,8 @@ def calc_NMSE(x: np.ndarray, y: np.ndarray) -> float:
 @pytest.fixture(autouse=True)
 def setup_method():
     block_length_samples = 16
-    # device = 'gpu' if torch.cuda.is_available() else 'cpu'
-    device = 'cpu'
+    device = 'gpu' if torch.cuda.is_available() else 'cpu'
+    # device = 'cpu'
     dtype = torch.float32
     return block_length_samples, device, dtype
 
