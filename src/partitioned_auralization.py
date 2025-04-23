@@ -54,11 +54,15 @@ class PartitionedAuralization:
 
         # Create the partitioned convolution objects
         if self.device == 'cpu':
-            self.pc_aur = PartitionedConvolutionCPU(aur_filter_td, block_length_samples, fft_size=fft_size, num_input_channels=1)
-            self.pc_fc = PartitionedConvolutionCPU(fc_filter_td, block_length_samples, fft_size=fft_size, num_input_channels=self.C)
+            self.pc_aur = PartitionedConvolutionCPU(aur_filter_td, block_length_samples,
+                                                    fft_size=fft_size, num_input_channels=1)
+            self.pc_fc = PartitionedConvolutionCPU(fc_filter_td, block_length_samples,
+                                                   fft_size=fft_size, num_input_channels=self.C)
         elif self.device == 'gpu':
-            self.pc_aur = PartitionedConvolutionGPU(aur_filter_td, block_length_samples, fft_size=fft_size, num_input_channels=1)
-            self.pc_fc = PartitionedConvolutionGPU(fc_filter_td, block_length_samples, fft_size=fft_size, num_input_channels=self.C)
+            self.pc_aur = PartitionedConvolutionGPU(aur_filter_td, block_length_samples,
+                                                    fft_size=fft_size, num_input_channels=1)
+            self.pc_fc = PartitionedConvolutionGPU(fc_filter_td, block_length_samples,
+                                                   fft_size=fft_size, num_input_channels=self.C)
         else:
             raise ValueError("The device must be either 'cpu' or 'gpu'.")
 
@@ -69,7 +73,9 @@ class PartitionedAuralization:
 
     def auralize(self, signal_td: np.ndarray) -> np.ndarray:
         """
-        Perform the auralization by removing the feedback path from the input and performing convolution with the auralization filter. The feedback path is estimated using the feedback cancelation filter.
+        Perform the auralization by removing the feedback path from the input and performing
+        convolution with the auralization filter. The feedback path is estimated using the
+        feedback cancelation filter.
     
         :param signal: The input signal (shape: (1, B) or (B,))
         :return: The auralization output (shape: (C, B))
@@ -79,7 +85,7 @@ class PartitionedAuralization:
                 signal_td = torch.from_numpy(signal_td.astype(np.float32))
             else:
                 raise ValueError("The input signal must be a numpy array or a torch tensor.")
-        
+
         # Reshape the input signal if necessary
         if signal_td.dim() == 1 and signal_td.shape[0] == self.B:
             signal_td = signal_td.reshape(1, -1)  # shape: (1, B)
@@ -89,11 +95,29 @@ class PartitionedAuralization:
         # subtract the feedback signal from the input signal
         signal_td = signal_td - self.feedback_est_td
 
-        # convolve with auralization filter
-        aur_output_td = self.pc_aur.convolve(signal_td)
+        # Transform the input signal to the frequency-domain
+        signal_fd = self.pc_aur.__parse_input__(signal_td)
 
-        # Update the feedback estimation buffer
-        self.feedback_est_td = self.pc_fc.convolve(aur_output_td).sum(dim=0)
+        # Perform the actual convolution with the auralization filters
+        aur_output_fd = self.pc_aur.__perform_convolution__(signal_fd)
+
+        # Perform the inverse RFFT to obtain the output signal
+        aur_output_td = torch.fft.irfft(aur_output_fd, axis=1)[:, -self.B:] # shape: (C, B)
+
+        # Transform the output signal to the frequency-domain for feedback cancelation
+        input_fc_td = self.pc_fc.__parse_input__(aur_output_td)
+
+        # Perform the actual convolution with the feedback cancelation filters
+        feedback_est_fd = self.pc_fc.__perform_convolution__(input_fc_td)
+
+        # Perform the inverse RFFT to obtain the feedback estimate
+        self.feedback_est_td = torch.fft.irfft(feedback_est_fd, axis=1)[:, -self.B:].sum(axis=0)  # shape: (B,)
+
+        if self.device == 'gpu':
+            # Move the output spectrum to the CPU
+            aur_output_td = aur_output_td.cpu()
+            # Move the feedback estimate to the CPU
+            self.feedback_est_td = self.feedback_est_td.cpu()
 
         # Return the auralization output
         return aur_output_td
