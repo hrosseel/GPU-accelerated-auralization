@@ -1,4 +1,4 @@
-# GPU-Accelerated Interactive Acoustic Auralization
+# GPU-Accelerated Interactive Auralization of Highly Reverberant Spaces
 
 This repository contains the code for the paper "GPU-Accelerated Interactive Auralization of Highly Reverberant Spaces".
 
