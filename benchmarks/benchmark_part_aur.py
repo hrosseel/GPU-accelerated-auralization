@@ -11,6 +11,7 @@ import numpy as np
 import torch
 from partitioned_auralization import PartitionedAuralization
 
+
 def prepare_benchmark(block_size: int = 256, input_length: int = FS * 1,
                       aur_filter_length: int = FS * 10, fc_filter_length: int = FS,
                       num_channels: int = 24) -> list:
@@ -55,11 +56,11 @@ def start_benchmark(aur_filter_length: int, fc_filter_length: int, num_channels:
     """
     logging.info('Benchmark started for auralization filter length: %d samples, feedback path length: %d samples, Number of Channels: %d, Block Size: %d',
                  aur_filter_length, fc_filter_length, num_channels, block_size)
-    
+ 
     input_length = int(NUM_INPUT_FRAMES * block_size)
-   
+ 
     pa_cpu, pa_gpu, signal_batch = prepare_benchmark(block_size, input_length, aur_filter_length, fc_filter_length, num_channels)
-  
+
     time.sleep(0.5)
     _cpu_log = benchmark(pa_cpu, signal_batch)
     time.sleep(0.5)

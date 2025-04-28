@@ -1,3 +1,4 @@
+// The code in this file was written with assistance from GitHub Copilot.
 using namespace torch::indexing;
 #include <torch/extension.h>
 #include <c10/cuda/CUDAException.h>
