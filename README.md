@@ -1,6 +1,6 @@
 # GPU-Accelerated Interactive Auralization of Highly Reverberant Spaces
 
-This repository contains the code for the paper "GPU-Accelerated Interactive Auralization of Highly Reverberant Spaces".
+This repository contains the code for the paper "GPU-Accelerated Interactive Auralization of Highly Reverberant Spaces", which was submitted to the Journal of the Audio Engineering Society. A preprint of this work can be found on [ArXiv](https://arxiv.org/abs/2509.04390).
 
 Authors: Hannes Rosseel and Toon van Waterschoot.
 
