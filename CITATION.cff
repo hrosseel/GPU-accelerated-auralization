@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If you use this work, please cite it as below."
+title: "Accelerated Interactive Auralization of Highly Reverberant Spaces using Graphics Hardware"
+authors:
+  - family-names: Rosseel
+    given-names: Hannes
+  - family-names: van Waterschoot
+    given-names: Toon
+date-released: 2025-09-01
+version: "1.0.0"
+preferred-citation:
+  type: unpublished
+  title: "Accelerated Interactive Auralization of Highly Reverberant Spaces using Graphics Hardware"
+  authors:
+    - family-names: Rosseel
+      given-names: Hannes
+    - family-names: van Waterschoot
+      given-names: Toon
+  year: 2025
+  doi: 10.48550/arXiv.2509.04390
+  url: https://arxiv.org/abs/2509.04390
+  repository-code: https://arxiv.org/abs/2509.04390
