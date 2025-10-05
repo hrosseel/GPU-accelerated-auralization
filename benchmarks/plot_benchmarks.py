@@ -1,6 +1,6 @@
 """
-This script plots the benchmark results for different filter lengths, block sizes, and number of channels for the
-partitioned convolution algorithm.
+This script plots the benchmark results for different filter lengths, block sizes, and number of
+channels for the partitioned convolution algorithm.
 """
 import os
 import numpy as np
@@ -8,8 +8,8 @@ import matplotlib.pyplot as plt
 
 import scienceplots
 
-
 from config import DEFAULT_BLOCK_SIZE
+
 
 plt.style.use(['science', 'grid', 'ieee', 'std-colors'])
 

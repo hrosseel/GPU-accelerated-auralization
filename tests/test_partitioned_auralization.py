@@ -88,7 +88,8 @@ def test_single_channel_feedback(setup_method):
         # Simulate the feedback path
         input_block = fb_simulator.simulate(output)
         output = pa.auralize(input_block)
-        np.testing.assert_allclose(output.numpy().flatten(), ref_output_block, rtol=1e-2, atol=1e-2)
+        max_abs_diff_db = 20 * np.log10(np.max(np.abs(output.numpy().flatten() - ref_output_block)))
+        assert max_abs_diff_db <= -50, f"Max abs diff {max_abs_diff_db} exceeds -50 dB threshold"
 
 
 def test_multi_channel_no_feedback(setup_method):
@@ -115,7 +116,9 @@ def test_multi_channel_no_feedback(setup_method):
     # Check that the output is the same for the next blocks
     for ref_output_block in expected_output_blocks[1:]:
         output = pa.auralize(torch.zeros_like(input_block_td))
-        np.testing.assert_allclose(output.numpy(), ref_output_block, rtol=1e-2, atol=1e-2)
+        # np.testing.assert_allclose(output.numpy(), ref_output_block, rtol=1e-2, atol=1e-2)
+        max_abs_diff_db = 20 * np.log10(np.max(np.abs(output.numpy() - ref_output_block)))
+        assert max_abs_diff_db <= -50, f"Max abs diff {max_abs_diff_db} exceeds -50 dB threshold"
 
 
 def test_multi_channel_feedback(setup_method):
