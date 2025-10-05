@@ -30,6 +30,7 @@ TEXT_HEIGHT = TEXT_WIDTH * (8/10)
 
 def plot_benchmark_results(benchmark_data_conv, benchmark_data_aur, x_values, x_label="", y_label="",
                            latency_budget = [], legend_labels=[], legend_voffset=1):
+    """ Plot the benchmark results """
     # Extract the data
     cpu_logs_conv = benchmark_data_conv['cpu_logs']
     gpu_logs_conv = benchmark_data_conv['gpu_logs']
@@ -70,11 +71,14 @@ def plot_benchmark_results(benchmark_data_conv, benchmark_data_aur, x_values, x_
 def main():
     """ Main function """
     workspace_dir = os.path.dirname(os.path.abspath(__file__))
-    legend_labels = ['Part. conv. (CPU)', 'Aur. System (CPU)', 'Part. conv. (GPU)', 'Aur. System (GPU)']
+    legend_labels = ['Part. conv. (CPU)', 'Aur. System (CPU)', 'Part. conv. (GPU)',
+                     'Aur. System (GPU)']
 
     # Plot benchmark results for different filter lengths
-    benchmark_data_conv = np.load(os.path.join(workspace_dir, './data/benchmark_conv_filter_len.npz'), allow_pickle=True)
-    benchmark_data_aur = np.load(os.path.join(workspace_dir, './data/benchmark_aur_filter_len_aur.npz'), allow_pickle=True)
+    benchmark_data_conv = np.load(os.path.join(workspace_dir, './data/benchmark_conv_filter_len.npz'),
+                                  allow_pickle=True)
+    benchmark_data_aur = np.load(os.path.join(workspace_dir, './data/benchmark_aur_filter_len_aur.npz'),
+                                 allow_pickle=True)
     
     fig = plot_benchmark_results(
         benchmark_data_conv=benchmark_data_conv,
@@ -88,8 +92,10 @@ def main():
     fig.savefig(os.path.join(workspace_dir, './figures/benchmark_filter_len.pdf'))
 
     # Plot benchmark results for different block sizes
-    benchmark_data_conv = np.load(os.path.join(workspace_dir, './data/benchmark_conv_block_size.npz'), allow_pickle=True)
-    benchmark_data_aur = np.load(os.path.join(workspace_dir, './data/benchmark_aur_block_size.npz'), allow_pickle=True)
+    benchmark_data_conv = np.load(os.path.join(workspace_dir, './data/benchmark_conv_block_size.npz'),
+                                  allow_pickle=True)
+    benchmark_data_aur = np.load(os.path.join(workspace_dir, './data/benchmark_aur_block_size.npz'),
+                                 allow_pickle=True)
     latency_budget = benchmark_data_conv['block_sizes'] / FS
 
     fig = plot_benchmark_results(
@@ -105,8 +111,10 @@ def main():
     fig.savefig(os.path.join(workspace_dir, './figures/benchmark_block_size.pdf'))
 
     # Plot benchmark results for different number of channels
-    benchmark_data_conv = np.load(os.path.join(workspace_dir, './data/benchmark_conv_num_channels.npz'), allow_pickle=True)
-    benchmark_data_aur = np.load(os.path.join(workspace_dir, './data/benchmark_aur_num_channels.npz'), allow_pickle=True)
+    benchmark_data_conv = np.load(os.path.join(workspace_dir, './data/benchmark_conv_num_channels.npz'),
+                                  allow_pickle=True)
+    benchmark_data_aur = np.load(os.path.join(workspace_dir, './data/benchmark_aur_num_channels.npz'),
+                                 allow_pickle=True)
     fig = plot_benchmark_results(
         benchmark_data_conv=benchmark_data_conv,
         benchmark_data_aur=benchmark_data_aur,
