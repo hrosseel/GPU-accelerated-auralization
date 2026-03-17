@@ -7,6 +7,7 @@ can be computed by partitioning the signals into blocks and performing the convo
 frequency-domain, which allows for efficient computation of the convolution by exploiting the
 parallel structure of the algorithm.
 """
+import hashlib
 import os
 
 from numba import njit, prange, complex64, int64
@@ -26,14 +27,15 @@ def load_cuda(cuda_src, cpp_src, funcs, extra_cuda_cflags=[], verbose=False):
     """
         Load the CUDA code
     """
-    random_id = np.random.randint(0, 1e6)
+    # Use an MD5 key to reuse builds with identical parameters
+    key = hashlib.md5((cuda_src + cpp_src + str(funcs) + str(extra_cuda_cflags)).encode()).hexdigest()[:12]
     return load_inline(
         cuda_sources=[cuda_src],
         cpp_sources=[cpp_src],
         functions=funcs,
         extra_cuda_cflags=["-O2"] + extra_cuda_cflags,
         verbose=verbose,
-        name=f"inline_ext_{random_id}"
+        name=f"inline_ext_{key}"
     )
 
 # Load CUDA code from file "cuda/kernel.cu"
