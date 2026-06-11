@@ -1,6 +1,6 @@
 # GPU-Accelerated Interactive Auralization of Highly Reverberant Spaces
 
-This repository contains the code for the paper "GPU-Accelerated Interactive Auralization of Highly Reverberant Spaces", which was submitted to the Journal of the Audio Engineering Society. A preprint of this work can be found on [ArXiv](https://arxiv.org/abs/2509.04390).
+This repository contains the code for the paper "GPU-Accelerated Interactive Auralization of Highly Reverberant Spaces", which was published as an engineering report to the Journal of the Audio Engineering Society. You can find the paper [here](https://aes.org/publications/elibrary-page/?id=23241).
 
 Authors: Hannes Rosseel and Toon van Waterschoot.
 
@@ -45,13 +45,14 @@ cgexec -g cpuset:realtime_app python benchmarks/benchmark_part_conv.py
 
 If you use this code in your research, consider citing the repository and the preprint below:
 ```
-@misc{rosseel2025accelerated,
-  title={Accelerated Interactive Auralization of Highly Reverberant Spaces using Graphics Hardware}, 
-  author={Hannes Rosseel and Toon van Waterschoot},
-  year={2025},
-  eprint={2509.04390},
-  archivePrefix={arXiv},
-  primaryClass={eess.AS},
-  url={https://arxiv.org/abs/2509.04390}
+@article{rosseel2026accelerated,
+title={{Accelerated Interactive Auralization of Highly Reverberant Spaces Using Graphics Hardware}},
+author={Rosseel, Hannes and van Waterschoot, Toon},
+year={2026},
+month={jun},
+journal={Journal of the Audio Engineering Society},
+volume={74},
+number={6},
+pages={445-455},
 }
 ```
